@@ -1,0 +1,4 @@
+private/
+node_modules/
+test/prompts/
+test/ai-replies/

@@ -1,0 +1,351 @@
+/* No Need Ask IO — agents ask an ePartner question, get the steps with screenshots of where to tap.
+   Guides + screenshots come from the team server (team code) and are kept on the phone (works offline).
+   Questions the guides can't answer go to the AI on the team server, which only answers from the ePartner library. */
+(function () {
+  const CFG = window.NNA_CONFIG, M = window.NNMatch;
+  const $ = (s, el) => (el || document).querySelector(s), $$ = (s, el) => [...(el || document).querySelectorAll(s)];
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+  const load = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
+  const save = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+  const ICON = {
+    back: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+    home: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>',
+    more: '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
+    chev: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>',
+    spark: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.2 6.3L20 10l-5.8 1.7L12 18l-2.2-6.3L4 10l5.8-1.7z"/></svg>'
+  };
+  const POPULAR = ['login', 'commission', 'dcms', 'forms', 'client-details', 'e-policy', 'icm', 'cs-status', 'hotline', 'tcf', 'mpos', 'inbox', 'underwriting', 'product', 'pdf-passcode', 'rop', 'cs-manual'];
+
+  /* ---------- storage: the pack (about 2 MB) lives in IndexedDB ---------- */
+  const DB = (() => {
+    let dbp = null;
+    const open = () => dbp || (dbp = new Promise((ok, no) => { const r = indexedDB.open('nnaio', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); }));
+    const tx = (mode, fn) => open().then(db => new Promise((ok, no) => { const t = db.transaction('kv', mode); const r = fn(t.objectStore('kv')); t.oncomplete = () => ok(r && r.result); t.onerror = () => no(t.error); }));
+    return {get: k => tx('readonly', s => s.get(k)), set: (k, v) => tx('readwrite', s => s.put(v, k)), del: k => tx('readwrite', s => s.delete(k))};
+  })();
+
+  let PACK = null, packState = null, syncing = null;
+  const session = () => load('nnaio.session', null) || load('rff.session', null);
+
+  async function post(body, who) {
+    const s = who || session(); if (!s) throw {code: 'unauthorized'};
+    let r;
+    try { r = await fetch(CFG.api, {method: 'POST', headers: {'Content-Type': 'text/plain;charset=utf-8'}, body: JSON.stringify(Object.assign({code: s.code, name: s.name}, body))}); }
+    catch (e) { throw {code: 'offline'}; }
+    let j; try { j = await r.json(); } catch (e) { throw {code: 'upstream_error'}; }
+    if (j.error) throw {code: j.error};
+    return j;
+  }
+  const packOk = p => p && p.app === 'nnaio' && Array.isArray(p.guides) && p.shots;
+  async function syncPack() {
+    if (!session() || syncing) return syncing;
+    syncing = (async () => {
+      try {
+        const r = await post({op: 'iopack', have: PACK ? PACK.ver : ''});
+        packState = 'ok';
+        if (r.same) return;
+        let p = null; try { p = JSON.parse(r.text); } catch (e) {}
+        if (!packOk(p)) { packState = 'bad_pack'; return; }
+        const had = !!PACK; PACK = p; await DB.set('pack', p).catch(() => {});
+        toast(had ? 'Guides updated' : 'Guides ready, also offline'); render();
+      } catch (e) {
+        packState = e.code || 'offline';
+        if (e.code === 'unauthorized') save('nnaio.session', null);
+        if (!PACK) render();
+      } finally { syncing = null; }
+    })();
+    return syncing;
+  }
+
+  /* ---------- small UI helpers ---------- */
+  let toastT = 0;
+  function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 2600); }
+  function sheet(html, after) {
+    const el = $('#sheet'); el.innerHTML = `<div class="box" role="dialog" aria-modal="true">${html}</div>`; el.hidden = false;
+    el.onclick = e => { if (e.target === el) closeSheet(); };
+    if (after) after(el); return el;
+  }
+  function closeSheet() { $('#sheet').hidden = true; $('#sheet').innerHTML = ''; }
+  const shotSrc = id => PACK && PACK.shots[id] ? 'data:image/jpeg;base64,' + PACK.shots[id] : '';
+  function openViewer(id, caption) {
+    const v = $('#viewer');
+    v.innerHTML = `<div class="vt"><span>${esc(caption || 'Pinch or scroll to look around')}</span><button class="btn sm" data-fit>Fit</button><button class="btn sm primary" data-x>Close</button></div><div class="vs"><img alt="" src="${shotSrc(id)}"></div>`;
+    v.hidden = false; v.classList.remove('fit');
+    $('[data-x]', v).onclick = () => { v.hidden = true; v.innerHTML = ''; };
+    $('[data-fit]', v).onclick = e => { v.classList.toggle('fit'); e.target.textContent = v.classList.contains('fit') ? 'Zoom' : 'Fit'; };
+  }
+  const pathHtml = p => p && p.length ? `<div class="path">${p.map(esc).map(x => `<span>${x}</span>`).join('<i>›</i>')}</div>` : '';
+
+  /* ---------- routing: #/  #/g/<id>  #/ask  #/all ---------- */
+  let current = {q: '', ai: null, aiErr: null, aiFor: '', busy: false};
+  function go(hash) { if (location.hash === hash) render(); else location.hash = hash; }
+  addEventListener('hashchange', () => { render(); scrollTo(0, 0); });
+
+  function bar(title, sub, back) {
+    return `<header class="bar">${back ? `<button class="ib" data-back aria-label="Back">${ICON.back}</button>` : ''}
+      <div class="brand"><b>${esc(title)}</b><span>${esc(sub)}</span></div>
+      ${back ? `<button class="ib" data-home aria-label="Home">${ICON.home}</button>` : `<button class="ib" data-menu aria-label="More">${ICON.more}</button>`}</header>`;
+  }
+  function wireBar(root) {
+    const b = $('[data-back]', root); if (b) b.onclick = () => history.length > 1 ? history.back() : go('#/');
+    const h = $('[data-home]', root); if (h) h.onclick = () => go('#/');
+    const m = $('[data-menu]', root); if (m) m.onclick = menu;
+  }
+
+  function render() {
+    const app = $('#app'), h = location.hash || '#/';
+    if (h.startsWith('#/g/')) app.innerHTML = guideView(decodeURIComponent(h.slice(4)));
+    else if (h === '#/ask') app.innerHTML = askView();
+    else if (h === '#/all') app.innerHTML = allView();
+    else app.innerHTML = homeView();
+    wireBar(app); wire(app);
+  }
+
+  /* ---------- home ---------- */
+  function homeView() {
+    const g = PACK ? PACK.guides : [];
+    const pop = POPULAR.map(id => g.find(x => x.id === id)).filter(Boolean);
+    const recent = load('nnaio.recent', []);
+    let status = '';
+    if (!session()) status = `<div class="card"><h2>Get started</h2><p style="margin-bottom:12px">Sign in once with your name and the REDEFINE team code to download the ePartner guides. After that the guides work even without internet.</p><button class="btn primary block" data-signin>Sign in</button></div>`;
+    else if (!PACK) status = packState && packState !== 'ok'
+      ? `<div class="notice">${esc(PACK_MSG[packState] || PACK_MSG.offline)}</div><button class="btn block" data-retry style="margin-bottom:12px">Try again</button>`
+      : `<div class="loading"><div class="spin"></div>Downloading the ePartner guides (about 2 MB)…</div>`;
+    return bar('No Need Ask IO', 'REDEFINE · ePartner helper') + `<main class="wrap">
+      <section class="ask">
+        <h1>What do you need in ePartner?</h1>
+        <p>Ask in English, 中文 or BM. You get the steps and a picture of where to tap.</p>
+        <label for="q" class="muted" style="color:#CFC8B8;display:block;margin-bottom:6px">Your question</label>
+        <textarea id="q" placeholder="e.g. How to check my commission?  /  怎样下载电子保单？  /  Macam mana nak hantar ICM?" maxlength="500"></textarea>
+        <div class="row"><button class="btn primary block" data-ask>Show me how</button></div>
+        <div class="chips">${pop.slice(0, 8).map(x => `<button class="chip" data-g="${x.id}">${esc(x.title.split(' (')[0].split(' / ')[0])}</button>`).join('')}</div>
+      </section>
+      ${status}
+      ${recent.length ? `<h2 class="sec">Asked recently on this phone</h2>${recent.slice(0, 4).map(r => `<button class="item" data-rq="${esc(r)}"><div class="t"><b>${esc(r)}</b></div>${ICON.chev}</button>`).join('')}` : ''}
+      ${pop.length ? `<h2 class="sec">The 17 questions agents ask most</h2>${pop.map((x, i) => item(x, i + 1)).join('')}
+        <button class="btn block" data-all style="margin-top:4px">See all ${g.length} guides</button>` : ''}
+      <p class="foot">Guides from ePartner, checked ${PACK ? esc(fmtDate(PACK.built)) : '9 Nov 2026'}. ePartner changes, so if a screen looks different, tell Kah Jian.<br>
+      ${session() ? `<button data-menu2>Settings</button>` : ''}</p>
+    </main>`;
+  }
+  const fmtDate = iso => { try { return new Date(iso).toLocaleDateString('en-GB', {day: 'numeric', month: 'short', year: 'numeric'}); } catch (e) { return ''; } };
+  const item = (g, n) => `<button class="item" data-g="${g.id}"><span class="n">${n}</span><div class="t"><b>${esc(g.title)}</b><span>${esc(g.zh || '')}${g.ms ? ' · ' + esc(g.ms) : ''}</span></div>${ICON.chev}</button>`;
+  const PACK_MSG = {
+    no_pack: 'The team server has no guides yet. Kah Jian needs to upload them once (Settings → Owner: upload guides).',
+    invalid_request: 'The team server needs its update before it can share the guides. Tell Kah Jian.',
+    bad_pack: 'The guides file on the team server could not be read. Tell Kah Jian.',
+    unauthorized: 'Your team code was not accepted. Please sign in again.',
+    offline: 'Could not reach the team server. Check your internet and try again.'
+  };
+
+  function allView() {
+    const g = PACK ? PACK.guides : [];
+    return bar('All guides', `${g.length} ePartner how-tos`, true) + `<main class="wrap">${g.map((x, i) => item(x, i + 1)).join('') || '<p class="empty">Sign in first to download the guides.</p>'}</main>`;
+  }
+
+  /* ---------- a guide with screenshots ---------- */
+  function guideView(id, opts) {
+    opts = opts || {};
+    const g = PACK && PACK.guides.find(x => x.id === id);
+    if (!g) return bar('Guide', '', true) + `<main class="wrap"><p class="empty">This guide is not on this phone yet. Go back and sign in to download the guides.</p></main>`;
+    const asked = current.q && current.matched === id ? current.q : '';
+    return (opts.inline ? '' : bar('No Need Ask IO', 'Step by step', true)) + `<main class="${opts.inline ? '' : 'wrap'}">
+      ${asked ? `<div class="youasked">You asked: <b>${esc(asked)}</b></div>` : ''}
+      <div class="head"><div class="kicker">${ICON.spark} ${opts.inline ? 'Screenshots for this' : 'How to do it yourself'}</div><h1>${esc(g.title)}</h1>${g.zh ? `<p class="sub">${esc(g.zh)} · ${esc(g.ms || '')}</p>` : ''}</div>
+      ${g.steps.map((s, i) => `<article class="step"><div class="top"><span class="num">${i + 1}</span><div class="txt">${esc(s.t)}${pathHtml(s.path)}</div></div>
+        ${s.shot && shotSrc(s.shot) ? `<button class="shot" data-shot="${s.shot}" data-cap="Step ${i + 1}" aria-label="Open screenshot for step ${i + 1}"><img loading="lazy" alt="ePartner screenshot for step ${i + 1}, red box shows where to tap" src="${shotSrc(s.shot)}"><span class="zoom">Tap to zoom</span></button>` : ''}</article>`).join('')}
+      ${g.tips && g.tips.length ? `<div class="tips"><h3>Good to know</h3><ul>${g.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>` : ''}
+      ${opts.inline ? '' : `<p class="src">Source: ${esc(g.src || 'ePartner Study Pack')} · screenshots 9 Nov 2026. Red boxes show where to tap.</p>
+      <div class="row" style="margin-bottom:10px"><a class="btn dark" href="${CFG.epartner}" target="_blank" rel="noopener">Open ePartner</a><button class="btn" data-copy="${g.id}">Copy steps</button></div>
+      ${asked ? `<button class="btn block" data-ai>${ICON.spark} Not what I asked, ask AI</button>` : `<button class="btn block" data-followup="${g.id}">${ICON.spark} Ask another question</button>`}
+      ${helpBox()}`}
+    </main>`;
+  }
+  const helpBox = () => `<div class="help"><b>Still stuck after trying?</b><p>Send a written query through <a href="#/g/icm">ICM</a> (reply in 3 working days) or call Agent Careline <a href="tel:0342598111">03-4259 8111</a>. Then tell your IO what you already tried.</p></div>`;
+  function copyText(g) {
+    return `*${g.title}*\n` + g.steps.map((s, i) => `${i + 1}. ${s.t}`).join('\n') + (g.tips && g.tips.length ? `\n\nTips:\n- ` + g.tips.join('\n- ') : '') + `\n\n(from No Need Ask IO)`;
+  }
+
+  /* ---------- ask flow ---------- */
+  function ask(q) {
+    q = String(q || '').trim();
+    if (q.length < 3) { toast('Type your question first'); return; }
+    const pd = M.personalData(q);
+    if (pd.length) {
+      sheet(`<h3>Remove client details first</h3><p>Your question has what looks like ${esc(pd.join(', '))}. Client details should never be typed into this app. The steps are the same for every client.</p>
+        <div class="cmp">${esc(M.stripPersonal(q))}</div>
+        <div class="row"><button class="btn" data-x>Edit my question</button><button class="btn primary" data-ok>Use this version</button></div>`, el => {
+        $('[data-x]', el).onclick = () => { closeSheet(); const t = $('#q'); if (t) { t.value = q; t.focus(); } };
+        $('[data-ok]', el).onclick = () => { closeSheet(); ask(M.stripPersonal(q)); };
+      });
+      return;
+    }
+    const rec = load('nnaio.recent', []).filter(x => x !== q); rec.unshift(q); save('nnaio.recent', rec.slice(0, 8));
+    current = {q, ai: null, aiErr: null, aiFor: '', busy: false};
+    if (!PACK) { current.matched = null; go('#/ask'); askAI(); return; }
+    const b = M.best(q, PACK.guides, PACK.syn);
+    current.match = b;
+    if (b.confident) { current.matched = b.top.guide.id; go('#/g/' + b.top.guide.id); return; }
+    current.matched = null; go('#/ask'); askAI();
+  }
+  async function askAI() {
+    const q = current.q; if (!q || current.busy) return;
+    if (!session()) { current.aiErr = 'unauthorized'; render(); return; }
+    current.busy = true; current.ai = null; current.aiErr = null; current.aiFor = q;
+    if (location.hash !== '#/ask') go('#/ask'); else render();
+    try {
+      const r = await post({op: 'ioask', question: q});
+      let a; try { a = parseJSON(r.text); } catch (e) { throw {code: 'invalid_json'}; }
+      a.srcList = r.sources || [];
+      if (current.aiFor === q) current.ai = a;
+    } catch (e) { if (current.aiFor === q) current.aiErr = e.code || 'upstream_error'; }
+    finally { current.busy = false; if (location.hash === '#/ask') render(); }
+  }
+  function parseJSON(text) {
+    const fence = String(text).match(/```(?:json)?\s*([\s\S]*?)```/), a = text.indexOf('{'), b = text.lastIndexOf('}');
+    for (const t of [text, fence && fence[1], a >= 0 && b > a && text.slice(a, b + 1)]) { if (!t) continue; try { return JSON.parse(t); } catch (e) {} }
+    throw new Error('bad json');
+  }
+  const AI_ERR = {
+    offline: 'No internet right now, so the AI can\'t answer. The guides below still work offline.',
+    unauthorized: 'Sign in with the team code to ask the AI.',
+    daily_limit: 'The team has used today\'s AI limit. Try the guides below, or ask again tomorrow.',
+    no_credit: 'The AI account is out of credit. Tell Kah Jian.', bad_api_key: 'The AI key on the team server is not working. Tell Kah Jian.',
+    no_pack: 'The ePartner library is not on the team server yet. Tell Kah Jian.',
+    invalid_request: 'The team server needs its update before it can answer questions. Tell Kah Jian.',
+    rate_limited: 'The AI is busy. Wait a minute and try again.', invalid_json: 'The AI answer came back garbled. Try asking again.'
+  };
+  function askView() {
+    const q = current.q, b = current.match;
+    if (!q) return bar('No Need Ask IO', '', true) + `<main class="wrap"><p class="empty">Ask a question on the home screen.</p></main>`;
+    const others = b && b.others ? b.others.filter(r => !(current.ai && r.guide.id === current.ai.guide)) : [];
+    const sugg = others.length ? `<h2 class="sec">Other guides that may help</h2>${others.map((r, i) => item(r.guide, i + 1)).join('')}` : '';
+    let body = '';
+    if (current.busy) body = `<div class="loading"><div class="spin"></div><b style="color:var(--text)">Searching the ePartner library…</b>Checking GE's guides and manuals. Usually 10 to 30 seconds.</div>`;
+    else if (current.aiErr) body = `<div class="notice">${esc(AI_ERR[current.aiErr] || 'Something went wrong on the team server. Try again in a moment.')}</div>
+      ${current.aiErr === 'unauthorized' ? '<button class="btn primary block" data-signin style="margin-bottom:12px">Sign in</button>' : '<button class="btn block" data-ai style="margin-bottom:12px">Try again</button>'}`;
+    else if (current.ai) body = answerHtml(current.ai);
+    return bar('No Need Ask IO', 'Answer', true) + `<main class="wrap">
+      <div class="youasked">You asked: <b>${esc(q)}</b></div>
+      ${body}${sugg}${current.busy ? '' : helpBox()}</main>`;
+  }
+  function answerHtml(a) {
+    const nc = a.kind === 'not_covered';
+    const conf = a.confidence === 'high' ? '<span class="pill ok">Found in ePartner documents</span>' : a.confidence === 'low' || nc ? '<span class="pill err">Not sure, please double-check</span>' : '<span class="pill warn">Check the source to be safe</span>';
+    const g = a.guide && PACK && PACK.guides.find(x => x.id === a.guide);
+    const steps = Array.isArray(a.steps) ? a.steps.filter(s => s && (s.t || s.text)) : [];
+    const used = (a.sources || []).map(n => a.srcList[n - 1]).filter(Boolean);
+    return `<div class="head"><div class="kicker">${ICON.spark} AI answer from the ePartner library</div><h1>${esc(a.title || 'Answer')}</h1><p class="sub">${conf}</p></div>
+      <div class="answer ${nc ? 'nc' : ''}">${esc(a.answer || '')}</div>
+      ${steps.map((s, i) => `<article class="step"><div class="top"><span class="num">${i + 1}</span><div class="txt">${esc(s.t || s.text)}${pathHtml(s.path)}</div></div></article>`).join('')}
+      ${a.notes && a.notes.length ? `<div class="tips"><h3>Good to know</h3><ul>${a.notes.map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>` : ''}
+      ${g ? `<div style="margin-top:6px">${guideView(g.id, {inline: true})}</div><button class="btn block" data-g="${g.id}" style="margin-bottom:12px">Open the full "${esc(g.title)}" guide</button>` : ''}
+      ${used.length ? `<details class="sources"><summary>Where this comes from (${used.length})</summary><ul>${used.map(s => `<li>${esc(s.s)}: ${esc(s.h)}</li>`).join('')}</ul></details>` : ''}
+      <p class="src">AI can make mistakes. For product rules and numbers, open the latest PDF on ePartner before telling a client.</p>
+      <div class="row" style="margin-bottom:10px"><a class="btn dark" href="${CFG.epartner}" target="_blank" rel="noopener">Open ePartner</a><button class="btn" data-copyai>Copy answer</button></div>`;
+  }
+
+  /* ---------- events ---------- */
+  function wire(root) {
+    $$('[data-g]', root).forEach(b => b.onclick = () => { current.matched = null; go('#/g/' + b.dataset.g); });
+    $$('[data-rq]', root).forEach(b => b.onclick = () => ask(b.dataset.rq));
+    const askBtn = $('[data-ask]', root), q = $('#q', root);
+    if (askBtn) askBtn.onclick = () => ask(q.value);
+    if (q) q.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(q.value); } };
+    $$('[data-ai]', root).forEach(b => b.onclick = () => { current.matched = null; askAI(); });
+    $$('[data-followup]', root).forEach(b => b.onclick = () => go('#/'));
+    $$('[data-shot]', root).forEach(b => b.onclick = () => openViewer(b.dataset.shot, b.dataset.cap));
+    $$('[data-signin]', root).forEach(b => b.onclick = () => signIn().then(ok => { if (ok) { render(); syncPack(); if (current.aiErr === 'unauthorized') askAI(); } }));
+    $$('[data-retry]', root).forEach(b => b.onclick = () => { packState = null; render(); syncPack(); });
+    const all = $('[data-all]', root); if (all) all.onclick = () => go('#/all');
+    const m2 = $('[data-menu2]', root); if (m2) m2.onclick = menu;
+    $$('[data-copy]', root).forEach(b => b.onclick = () => copy(copyText(PACK.guides.find(x => x.id === b.dataset.copy))));
+    const ca = $('[data-copyai]', root); if (ca) ca.onclick = () => {
+      const a = current.ai; copy(`*${a.title}*\n${a.answer}\n` + (a.steps || []).map((s, i) => `${i + 1}. ${s.t || s.text}`).join('\n') + '\n\n(from No Need Ask IO, AI answer: please double-check)');
+    };
+  }
+  async function copy(t) { try { await navigator.clipboard.writeText(t); toast('Copied. Paste it in WhatsApp.'); } catch (e) { sheet(`<h3>Copy this</h3><textarea style="width:100%;min-height:200px">${esc(t)}</textarea><button class="btn block" data-x>Close</button>`, el => { $('[data-x]', el).onclick = closeSheet; }); } }
+
+  function signIn() {
+    return new Promise(done => {
+      const el = sheet(`<h3>Sign in to the team server</h3><p>Enter your name and the REDEFINE team code (the same one as Form Filler). The ePartner guides then download to this phone.</p>
+        <div class="f"><label for="gName">Your name</label><input id="gName" autocomplete="name"></div>
+        <div class="f"><label for="gCode">Team code</label><input id="gCode" type="password" autocomplete="current-password"></div>
+        <p class="muted" id="gMsg" role="alert" style="color:var(--err);min-height:18px"></p>
+        <div class="row"><button class="btn" data-x>Cancel</button><button class="btn primary" data-ok>Sign in</button></div>`);
+      $('[data-x]', el).onclick = () => { closeSheet(); done(false); };
+      $('[data-ok]', el).onclick = async () => {
+        const who = {name: $('#gName', el).value.trim(), code: $('#gCode', el).value.trim()};
+        if (!who.name || !who.code) { $('#gMsg', el).textContent = 'Enter both.'; return; }
+        $('[data-ok]', el).disabled = true; $('[data-ok]', el).textContent = 'Checking…';
+        try { await post({op: 'login'}, who); save('nnaio.session', who); packState = null; closeSheet(); done(true); }
+        catch (e) {
+          $('#gMsg', el).textContent = e.code === 'unauthorized' ? 'That team code is not right.' : e.code === 'locked' ? 'Too many wrong tries. Wait 15 minutes.' : 'Could not reach the team server. Check your connection.';
+          $('[data-ok]', el).disabled = false; $('[data-ok]', el).textContent = 'Sign in';
+        }
+      };
+    });
+  }
+
+  function menu() {
+    const s = session();
+    sheet(`<h3>Settings</h3>
+      <p>${s ? `Signed in as <b>${esc(s.name)}</b>.` : 'Not signed in.'} Guides on this phone: ${PACK ? `${PACK.guides.length} guides, version ${esc(PACK.ver)}` : 'none yet'}.</p>
+      <button class="btn block" data-sync style="margin-bottom:8px">Check for new guides</button>
+      <button class="btn block" data-own style="margin-bottom:8px">Owner: upload guides and library</button>
+      ${s ? '<button class="btn ghost block" data-out>Sign out</button>' : '<button class="btn primary block" data-in>Sign in</button>'}
+      <button class="btn block" data-x style="margin-top:8px">Close</button>`, el => {
+      $('[data-x]', el).onclick = closeSheet;
+      $('[data-sync]', el).onclick = async () => { closeSheet(); if (!session()) return toast('Sign in first'); toast('Checking…'); await syncPack(); if (packState === 'ok') toast('You have the latest guides'); else toast(PACK_MSG[packState] || PACK_MSG.offline); };
+      $('[data-own]', el).onclick = () => { closeSheet(); ownerUpload(); };
+      const o = $('[data-out]', el); if (o) o.onclick = () => sheet(`<h3>Sign out?</h3><p>The guides stay on this phone. You need the team code again to ask the AI.</p><div class="row"><button class="btn" data-x>Cancel</button><button class="btn primary" data-ok>Sign out</button></div>`, e2 => {
+        $('[data-x]', e2).onclick = closeSheet; $('[data-ok]', e2).onclick = () => { save('nnaio.session', null); if (load('rff.session', null)) toast('Note: your Form Filler sign-in on this phone is still active'); closeSheet(); render(); };
+      });
+      const i = $('[data-in]', el); if (i) i.onclick = () => { closeSheet(); signIn().then(ok => { if (ok) { render(); syncPack(); } }); };
+    });
+  }
+
+  /* owner: pick nnaio_pack.json + nnaio_lib_*.json from tools/build-pack.js and send them to the team server */
+  function ownerUpload() {
+    const inp = $('#fPack'); inp.value = '';
+    inp.onchange = async () => {
+      const files = [...inp.files], items = [];
+      for (const f of files) {
+        const m = f.name.match(/nnaio_(pack|lib_(\d))\.json$/);
+        if (!m) continue;
+        items.push({name: m[2] ? 'lib' + m[2] : 'pack', file: f});
+      }
+      if (!items.length) return toast('Pick nnaio_pack.json and the nnaio_lib_ files');
+      items.sort((a, b) => a.name.localeCompare(b.name));
+      sheet(`<h3>Replace the team's guides?</h3><p>This replaces what every agent downloads and what the AI searches:</p>
+        <div class="cmp">${items.map(i => `${esc(i.file.name)} (${Math.round(i.file.size / 1024)} KB)`).join('<br>')}</div>
+        <div class="f"><label for="oCode">Owner code (not saved)</label><input id="oCode" type="password" autocomplete="off"></div>
+        <p class="muted" id="oMsg" role="alert" style="min-height:18px"></p>
+        <div class="row"><button class="btn" data-x>Cancel</button><button class="btn primary" data-ok>Upload</button></div>`, el => {
+        $('[data-x]', el).onclick = closeSheet;
+        $('[data-ok]', el).onclick = async () => {
+          const code = $('#oCode', el).value.trim(), msg = $('#oMsg', el), btn = $('[data-ok]', el);
+          if (!code) { msg.textContent = 'Enter the owner code.'; return; }
+          btn.disabled = true;
+          const who = {name: (session() || {}).name || 'owner', code};
+          try {
+            for (let i = 0; i < items.length; i++) {
+              msg.textContent = `Uploading ${i + 1} of ${items.length}: ${items[i].file.name}…`;
+              await post({op: 'ioput', name: items[i].name, text: await items[i].file.text()}, who);
+            }
+            closeSheet(); toast('Uploaded. Agents get the new guides next time they open the app.'); await syncPack();
+          } catch (e) {
+            msg.textContent = e.code === 'not_allowed' || e.code === 'unauthorized' ? 'That is not the owner code.' : e.code === 'invalid_request' ? 'The team server rejected a file (wrong file, or the server needs its update).' : 'Upload failed: ' + (e.code || 'error') + '. Nothing after this file was sent.';
+            btn.disabled = false;
+          }
+        };
+      });
+    };
+    inp.click();
+  }
+
+  /* ---------- start ---------- */
+  render();
+  DB.get('pack').then(p => { if (packOk(p)) { PACK = p; render(); } }).catch(() => {}).finally(() => syncPack());
+  window.__nna = {ask, state: () => ({PACK: !!PACK, packState, current})}; // for tests
+})();

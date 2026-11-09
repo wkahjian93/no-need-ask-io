@@ -1,0 +1,92 @@
+
+1. The 17 common questions (instant guide, no AI)
+  ok  "How to do TCF?" -> tcf
+  ok  "How to download MPOS?" -> mpos
+  ok  "How to check DCMS figures ANP FYC QFYLP NOC?" -> dcms
+  ok  "How to login epartner when got bug?" -> login
+  ok  "How to check commission?" -> commission
+  ok  "How to download forms?" -> forms
+  ok  "How to check client details?" -> client-details
+  ok  "How to call customer service or new business department?" -> hotline
+  ok  "How to check inbox?" -> inbox
+  ok  "How to use ICM?" -> icm
+  ok  "How to check underwriting guide?" -> underwriting
+  ok  "How to check product details?" -> product
+  ok  "How to update PDF passcode?" -> pdf-passcode
+  ok  "How to download customer PDF / e-policy after inforce?" -> e-policy
+  ok  "How to check customer service submission status?" -> cs-status
+  ok  "How to check and submit ROP?" -> rop
+  ok  "How to check customer service manual?" -> cs-manual
+
+2. Messy real-life wording (English / 中文 / BM / Manglish)
+  ok  "boss my epartner keep loading cannot go in" -> login
+  ok  "IO, how to check my comm ah?" -> commission
+  ok  "怎样查佣金" -> commission
+  ok  "nak download borang mana" -> forms
+  ok  "客户的保费几时到期" -> client-details
+  ok  "where to change nominee" -> cs-manual
+  ok  "medical checkup clinic near penang" -> panel
+  ok  "how to submit claim for client death" -> claim
+  ok  "mpos cannot update, where download new version" -> mpos
+  ok  "client wants tax relief statement" -> premium-statement
+  ok  "Macam mana nak hantar ICM?" -> icm
+  ok  "怎样下载电子保单？" -> e-policy
+  ok  "my ANP how much already, where to see" -> dcms
+  ok  "pdf cannot open, ask password" -> pdf-passcode
+
+3. Fact questions go to the AI (not a where-to-click guide)
+  ok  "SPYE2 free look period how many days?" -> AI
+  ok  "What is the entry age for SPYE2?" -> AI
+  ok  "客户想换受益人要准备什么文件？" -> AI
+  ok  "Can client add rider after policy inforce?" -> AI
+  ok  "What is the commission rate for SPYE2?" -> AI
+
+4. Client details are caught before anything is sent
+  ok  IC number
+  ok  phone + policy number
+  ok  email
+  ok  normal question passes
+  ok  stripped version has no digits left
+  ok  form codes are not mistaken for client data
+
+5. Every guide is complete
+  ok  guide login
+  ok  guide tcf
+  ok  guide mpos
+  ok  guide dcms
+  ok  guide commission
+  ok  guide forms
+  ok  guide client-details
+  ok  guide hotline
+  ok  guide inbox
+  ok  guide icm
+  ok  guide underwriting
+  ok  guide product
+  ok  guide pdf-passcode
+  ok  guide e-policy
+  ok  guide cs-status
+  ok  guide rop
+  ok  guide cs-manual
+  ok  guide nftf
+  ok  guide claim
+  ok  guide panel
+  ok  guide fit-proper
+  ok  guide fund-price
+  ok  guide premium-statement
+
+6. Team server (real Code.gs, in memory)
+  ok  agents cannot upload
+  ok  wrong code is refused
+  ok  no pack yet -> clear message
+  ok  owner rejects a wrong file
+  ok  owner upload of pack + library
+  ok  agent downloads the pack once
+  ok  second time: "same", no download
+  ok  AI search for "SPYE2 free look period how many days?" finds /free-?look/i
+  ok  AI search for "客户想换受益人要准备什么文件？" finds /Change of Nominee/i
+  ok  AI search for "Client admitted to hospital, how does the guarantee letter work?" finds /Healthcare|Guarantee|Claims and Healthcare/i
+  ok  AI search for "what blood test is GE5" finds /Blood Test|GE5|New Business Medical/i
+  ok  question too long is refused
+  ok  short plan code "sig" does not match "signature"
+
+78 passed, 0 failed
