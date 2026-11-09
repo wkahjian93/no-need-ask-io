@@ -93,7 +93,16 @@
   ok  a first question has no conversation block
   ok  bad history is ignored, not an error
   ok  the app never saves questions on the phone
+
+8. Photos and PDFs attached to a question
+  ok  photos reach the AI with the question, plus the attachment rule
+  ok  PDF text goes in the prompt, marked as not a GE source, and helps the search
+  ok  up to 8 images: a 9th is refused
+  ok  oversized or non-image data is refused
+  ok  no attachments: no attachment rule in the prompt
+  ok  the old photo reader (Form Filler / What-If) still sends at most 5 images
+  ok  locked sample PDF exists for the browser test
   ok  question too long is refused
   ok  short plan code "sig" does not match "signature"
 
-83 passed, 0 failed
+90 passed, 0 failed

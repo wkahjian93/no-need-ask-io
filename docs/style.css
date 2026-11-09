@@ -131,3 +131,17 @@ details.sources li{font-size:13px;color:var(--muted);margin:5px 0}
 .follow textarea{width:100%;min-height:64px;resize:vertical;border-radius:12px;border:1px solid var(--line);background:#FBF8F2;padding:10px 12px;font-size:16px;line-height:1.4}
 .follow .row{margin-top:8px}
 .follow .muted{font-size:12px;margin-top:6px}
+/* photos and PDFs attached to a question */
+.attach{margin-top:10px}
+.attach .row{display:flex;gap:8px}
+.attach .row .btn{flex:1;min-height:42px;font-size:14px;gap:6px}
+.attach.dark .row .btn{background:#16181E;border-color:#3A3D47;color:#fff}
+.tray{display:flex;gap:8px;overflow-x:auto;padding:10px 0 4px}
+.att{position:relative;flex:0 0 auto;width:96px;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.att img,.att .pdf{display:block;width:96px;height:96px;object-fit:cover;background:#F4EFE4}
+.att .pdf{display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--gold-d)}
+.att .an{display:block;font-size:11px;line-height:1.25;padding:4px 6px;color:var(--ink);max-height:42px;overflow:hidden}
+.att .rm{position:absolute;top:4px;right:4px;width:26px;height:26px;border-radius:50%;background:rgba(11,12,16,.85);color:#fff;font-weight:700;font-size:13px;border:0}
+.anote{font-size:12px;color:var(--muted);margin-top:4px}
+.attach.dark .anote{color:#B9B3A5}
+.attn{display:flex;align-items:center;gap:4px;font-size:12px;margin-top:4px;opacity:.85}

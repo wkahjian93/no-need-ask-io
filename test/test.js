@@ -91,6 +91,35 @@ t('a first question has no conversation block', () => {
 });
 t('bad history is ignored, not an error', () => assert.ok(!S.call({code: 'test-team-code', op: 'ioask', question: 'what is GE5', history: 'nonsense'}).error));
 t('the app never saves questions on the phone', () => assert.ok(!/save\('nnaio\.recent', (?!null)/.test(fs.readFileSync(path.join(__dirname, '..', 'docs', 'app.js'), 'utf8'))));
+console.log('\n8. Photos and PDFs attached to a question');
+const IMG = Buffer.from('fake-jpeg-bytes-for-test').toString('base64');
+t('photos reach the AI with the question, plus the attachment rule', () => {
+  const q = 'what does this error mean', r = S.call({code: 'test-team-code', op: 'ioask', question: q, images: [IMG, IMG, IMG]});
+  assert.ok(!r.error, r.error);
+  const ai = S.lastAI(); assert.strictEqual(ai.images, 3);
+  assert.ok(/9\. ATTACHMENTS: the agent attached 3 image/.test(ai.prompt) && /Never repeat names, IC/.test(ai.prompt));
+});
+t('PDF text goes in the prompt, marked as not a GE source, and helps the search', () => {
+  const r = S.call({code: 'test-team-code', op: 'ioask', question: 'can this be reinstated, which form?', doc: '[statement.pdf]\nPlan: SmartProtect You Exclusive 2 (SPYE2)\nPolicy status: Lapsed\nreinstatement'});
+  assert.ok(!r.error, r.error);
+  const ai = S.lastAI(); assert.strictEqual(ai.images, 0);
+  assert.ok(/ATTACHED PDF TEXT \(from the agent, not a GE source\):\n\[statement\.pdf\]/.test(ai.prompt));
+  assert.ok(r.sources.slice(0, 6).some(s => /reinstat/i.test(s.h)), r.sources.slice(0, 6).map(s => s.h).join(' / '));
+});
+t('up to 8 images: a 9th is refused', () => assert.strictEqual(S.call({code: 'test-team-code', op: 'ioask', question: 'what is this', images: Array(9).fill(IMG)}).error, 'invalid_request'));
+t('oversized or non-image data is refused', () => {
+  assert.strictEqual(S.call({code: 'test-team-code', op: 'ioask', question: 'what is this', images: ['A'.repeat(3000001)]}).error, 'invalid_request');
+  assert.strictEqual(S.call({code: 'test-team-code', op: 'ioask', question: 'what is this', images: ['<script>alert(1)</script>']}).error, 'invalid_request');
+});
+t('no attachments: no attachment rule in the prompt', () => {
+  S.call({code: 'test-team-code', op: 'ioask', question: 'what is GE5 blood test'});
+  assert.ok(!/9\. ATTACHMENTS/.test(S.lastAI().prompt) && S.lastAI().images === 0);
+});
+t('the old photo reader (Form Filler / What-If) still sends at most 5 images', () => {
+  S.call({code: 'test-team-code', op: 'ai', prompt: 'read these', images: Array(7).fill(IMG)});
+  assert.strictEqual(S.lastAI().images, 5);
+});
+t('locked sample PDF exists for the browser test', () => assert.ok(fs.readFileSync(path.join(__dirname, 'fixtures', 'locked-sample.pdf'), 'latin1').includes('/Encrypt')));
 t('question too long is refused', () => assert.strictEqual(S.call({code: 'test-team-code', op: 'ioask', question: 'x'.repeat(700)}).error, 'invalid_request'));
 t('short plan code "sig" does not match "signature"', () => assert.ok(!M.terms('change of signature', SYN).includes('smartinvest')));
 

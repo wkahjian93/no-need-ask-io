@@ -11,9 +11,10 @@ const file = name => ({getName: () => name, getBlob: () => ({getDataAsString: ()
 const iter = list => { let i = 0; return {hasNext: () => i < list.length, next: () => list[i++]}; };
 const folderObj = {getId: () => 'f', getFilesByName: n => iter(n in files ? [file(n)] : []), createFile: (n, t) => { files[n] = t; return file(n); }, searchFiles: () => iter(Object.keys(files).map(file))};
 const slug = q => q.toLowerCase().replace(/[^a-z0-9一-鿿]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
-let aiCalls = 0;
+let aiCalls = 0, lastAI = null;
 const fakeOpenAI = (url, opt) => {
   const body = JSON.parse(opt.payload), prompt = body.input[0].content[0].text;
+  lastAI = {images: body.input[0].content.filter(c => c.type === 'input_image').length, prompt};
   const q = (prompt.match(/AGENT QUESTION: ([\s\S]*)$/) || [])[1] || '';
   fs.mkdirSync(path.join(__dirname, 'prompts'), {recursive: true});
   fs.writeFileSync(path.join(__dirname, 'prompts', slug(q) + '.txt'), prompt);
@@ -44,7 +45,7 @@ function preload() {
     if (!r.ok) throw new Error('preload failed ' + f + ' ' + JSON.stringify(r));
   }
 }
-module.exports = {call, files, props, preload, aiCalls: () => aiCalls, slug};
+module.exports = {call, files, props, preload, aiCalls: () => aiCalls, lastAI: () => lastAI, slug};
 
 if (require.main === module) {
   if (process.argv.includes('--preload')) { preload(); console.log('preloaded team server files:', Object.keys(files).join(', ')); }
@@ -52,6 +53,11 @@ if (require.main === module) {
   http.createServer((req, res) => {
     if (req.url === '/gas' && req.method === 'POST') { let b = ''; req.on('data', c => b += c); req.on('end', () => { res.writeHead(200, {'Content-Type': 'application/json'}); res.end(ctx.doPost({postData: {contents: b}}).text); }); return; }
     const rel = decodeURIComponent(req.url.split('?')[0]).replace(/^\/+/, '') || 'index.html';
+    if (rel.startsWith('__fixtures/')) { // local test files only (never part of the published app)
+      const fx = path.join(__dirname, 'fixtures', path.basename(rel));
+      if (!fs.existsSync(fx)) { res.writeHead(404); return res.end(); }
+      res.writeHead(200, {'Content-Type': 'application/pdf'}); return fs.createReadStream(fx).pipe(res);
+    }
     if (rel === 'config.js') { res.writeHead(200, {'Content-Type': 'text/javascript'}); return res.end("window.NNA_CONFIG={api:location.origin+'/gas',epartner:'https://epartner-my.greateasternlife.com/'};"); }
     const f = path.join(DOCS, rel);
     if (!f.startsWith(DOCS) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end(); }

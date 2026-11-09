@@ -12,6 +12,8 @@
     home: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>',
     more: '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
     chev: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>',
+    cam: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+    clip: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5l-8.2 8.2a5 5 0 01-7.1-7.1l8.5-8.5a3.3 3.3 0 014.7 4.7l-8.4 8.4a1.7 1.7 0 01-2.4-2.4l7.7-7.7"/></svg>',
     spark: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.2 6.3L20 10l-5.8 1.7L12 18l-2.2-6.3L4 10l5.8-1.7z"/></svg>'
   };
   const POPULAR = ['login', 'commission', 'dcms', 'forms', 'client-details', 'e-policy', 'icm', 'cs-status', 'hotline', 'tcf', 'mpos', 'inbox', 'underwriting', 'product', 'pdf-passcode', 'rop', 'cs-manual'];
@@ -94,12 +96,14 @@
 
   function render() {
     const app = $('#app'), h = location.hash || '#/';
+    const keep = {q: ($('#q') || {}).value, fq: ($('#fq') || {}).value}; // typed text survives a redraw (e.g. after adding a photo)
     if (h.startsWith('#/g/')) app.innerHTML = guideView(decodeURIComponent(h.slice(4)));
     else if (h === '#/ask' && (current.turns || []).length) app.innerHTML = askView();
     else if (h === '#/ask') { history.replaceState(null, '', '#/'); app.innerHTML = homeView(); } // chat is gone after a refresh: start fresh
     else if (h === '#/all') app.innerHTML = allView();
     else app.innerHTML = homeView();
     wireBar(app); wire(app);
+    for (const k of ['q', 'fq']) { const el = $('#' + k); if (el && keep[k]) el.value = keep[k]; }
     if (h === '#/ask' && current.scrollTo != null) { const el = $('#t' + current.scrollTo); current.scrollTo = null; if (el) setTimeout(() => el.scrollIntoView({block: 'start'}), 0); }
   }
 
@@ -118,7 +122,8 @@
         <p>Ask in English, 中文 or BM. You get the steps and a picture of where to tap.</p>
         <label for="q" class="muted" style="color:#CFC8B8;display:block;margin-bottom:6px">Your question</label>
         <textarea id="q" placeholder="e.g. How to check my commission?  /  怎样下载电子保单？  /  Macam mana nak hantar ICM?" maxlength="500"></textarea>
-        <div class="row"><button class="btn primary block" data-ask>Show me how</button></div>
+        ${attachBar('home')}
+        <div class="row"><button class="btn primary block" data-ask>${draft.length ? 'Ask AI about this' : 'Show me how'}</button></div>
         <div class="chips">${pop.slice(0, 8).map(x => `<button class="chip" data-g="${x.id}">${esc(x.title.split(' (')[0].split(' / ')[0])}</button>`).join('')}</div>
       </section>
       ${status}
@@ -180,10 +185,12 @@
   }
   function ask(q) {
     q = String(q || '').trim();
+    if (q.length < 3 && draft.length) q = 'What does this show, and what should I do next?';
     if (q.length < 3) { toast('Type your question first'); return; }
     cleanFirst(q, '#q', q => {
-      current = {q, turns: []};
-      if (!PACK) { startAI(); return; }
+      current = {q, turns: [], att: draft}; draft = [];
+      // with photos or a PDF the AI has to read them, so skip the instant guides
+      if (!PACK || current.att.length) { startAI(); return; }
       const b = M.best(q, PACK.guides, PACK.syn);
       current.match = b;
       if (b.confident) { current.matched = b.top.guide.id; go('#/g/' + b.top.guide.id); return; }
@@ -197,6 +204,7 @@
   const MAX_TURNS = 8;
   function followUp(q2, fromGuide) {
     q2 = String(q2 || '').trim();
+    if (q2.length < 2 && (current.att || []).length) q2 = 'Please look at what I attached.';
     if (q2.length < 2) { toast('Type your follow-up first'); return; }
     if (current.turns.some(t => t.busy)) return;
     cleanFirst(q2, '#fq', q2 => {
@@ -218,7 +226,8 @@
     if (location.hash !== '#/ask') go('#/ask'); else render();
     // earlier questions that failed still count as context ("how about SRM?" needs the question before it)
     const history = cur.turns.slice(0, i).slice(-4).map(x => ({q: x.q, a: (turnSummary(x) || '(no answer was shown)').slice(0, 1500)}));
-    const body = Object.assign({op: 'ioask', question: t.q}, history.length ? {history} : {});
+    const body = Object.assign({op: 'ioask', question: t.q}, history.length ? {history} : {}, attPayload(cur.att || []));
+    t.att = (cur.att || []).length;
     try {
       let r;
       try { r = await post(body); }
@@ -250,11 +259,13 @@
     const html = turns.map((t, i) => {
       let body = '';
       if (t.guide) { const g = PACK && PACK.guides.find(x => x.id === t.guide); body = g ? `<button class="item" data-g="${g.id}"><span class="n">${ICON.spark}</span><div class="t"><b>${esc(g.title)}</b><span>Step-by-step guide with screenshots</span></div>${ICON.chev}</button>` : ''; }
-      else if (t.busy) body = `<div class="loading"><div class="spin"></div><b style="color:var(--text)">Searching the ePartner library…</b>Checking GE's guides and manuals. Usually 10 to 30 seconds.</div>`;
-      else if (t.err) body = `<div class="notice">${esc(AI_ERR[t.err] || 'Something went wrong on the team server. Try again in a moment.')}</div>
+      else if (t.busy) body = t.att
+        ? `<div class="loading"><div class="spin"></div><b style="color:var(--text)">Reading what you attached…</b>And checking GE's guides and manuals. Usually 20 to 60 seconds.</div>`
+        : `<div class="loading"><div class="spin"></div><b style="color:var(--text)">Searching the ePartner library…</b>Checking GE's guides and manuals. Usually 10 to 30 seconds.</div>`;
+      else if (t.err) body = `<div class="notice">${esc(t.err === 'invalid_request' && t.att ? 'The photos or PDF were too big for one question. Remove some pages and try again.' : AI_ERR[t.err] || 'Something went wrong on the team server. Try again in a moment.')}</div>
         ${t.err === 'unauthorized' ? '<button class="btn primary block" data-signin style="margin-bottom:12px">Sign in</button>' : `<button class="btn block" data-ai="${i}" style="margin-bottom:12px">Try again</button>`}`;
       else if (t.ai) body = answerHtml(t.ai, i);
-      return `<section class="turn" id="t${i}"><div class="youasked${i ? ' fu' : ''}">${i ? 'Follow-up' : 'You asked'}: <b>${esc(t.q)}</b></div>${body}</section>`;
+      return `<section class="turn" id="t${i}"><div class="youasked${i ? ' fu' : ''}">${i ? 'Follow-up' : 'You asked'}: <b>${esc(t.q)}</b>${t.att ? `<span class="attn">${ICON.clip} with ${attLabel(t.att)}</span>` : ''}</div>${body}</section>`;
     }).join('');
     const b = current.match, first = turns[0];
     const others = turns.length === 1 && b && b.others ? b.others.filter(r => !(first.ai && r.guide.id === first.ai.guide)) : [];
@@ -266,8 +277,123 @@
   }
   const composer = () => `<div class="follow"><label for="fq">Ask a follow-up</label>
     <textarea id="fq" maxlength="500" placeholder="e.g. How about for SRM?  /  那个表格在哪里？  /  Kalau client bawah 16 tahun?"></textarea>
+    ${attachBar('chat')}
     <div class="row"><button class="btn" data-new>New question</button><button class="btn primary" data-send>Send</button></div>
-    <p class="muted">The AI remembers this chat. No client details.</p></div>`;
+    <p class="muted">The AI remembers this chat${(current.att || []).length ? ' and what you attached' : ''}. Nothing is saved.</p></div>`;
+
+  /* ---------- photos and PDFs (password PDFs open on the phone; only page images / text are sent, for this chat only) ---------- */
+  const MAX_IMAGES = 8, MAX_DOC = 40000, PDF_PAGES_TEXT = 30;
+  let draft = [], attachTo = 'home', attSeq = 0;
+  const attList = where => where === 'chat' ? (current.att = current.att || []) : draft;
+  const imgCount = list => list.reduce((n, x) => n + x.imgs.length, 0);
+  const attLabel = n => `${n} attachment${n === 1 ? '' : 's'}`;
+  function attachBar(where) {
+    const list = attList(where), dark = where === 'home';
+    return `<div class="attach${dark ? ' dark' : ''}">
+      <div class="row"><button class="btn sm" data-cam="${where}">${ICON.cam} Take photo</button><button class="btn sm" data-up="${where}">${ICON.clip} Photo / PDF</button></div>
+      ${list.length ? `<div class="tray">${list.map(x => `<div class="att">${x.thumb ? `<img alt="" src="${x.thumb}">` : `<span class="pdf">PDF</span>`}
+        <span class="an">${esc(x.label)}</span><button class="rm" data-rm="${where}:${x.id}" aria-label="Remove ${esc(x.label)}">✕</button></div>`).join('')}</div>
+        <p class="anote">Sent to the team AI for this chat only, never saved. Cover the client's name and IC if you can.</p>` : ''}
+    </div>`;
+  }
+  function attPayload(list) {
+    if (!list.length) return {};
+    const images = list.flatMap(x => x.imgs).slice(0, MAX_IMAGES);
+    const doc = list.filter(x => x.text).map(x => `[${x.name}]\n${x.text}`).join('\n\n').slice(0, MAX_DOC);
+    return Object.assign({images}, doc ? {doc} : {});
+  }
+  function pickFiles(where, camera) { attachTo = where; const inp = $(camera ? '#fCam' : '#fUp'); inp.value = ''; inp.click(); }
+  async function toJpeg(src, maxSide, q) { // src: Blob or canvas
+    let cv = src;
+    if (!(src instanceof HTMLCanvasElement)) {
+      const bmp = await createImageBitmap(src), k = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+      cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+      const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.drawImage(bmp, 0, 0, cv.width, cv.height);
+    } else if (Math.max(cv.width, cv.height) > maxSide) {
+      const k = maxSide / Math.max(cv.width, cv.height), c2 = document.createElement('canvas'); c2.width = Math.round(cv.width * k); c2.height = Math.round(cv.height * k);
+      c2.getContext('2d').drawImage(cv, 0, 0, c2.width, c2.height); cv = c2;
+    }
+    return cv.toDataURL('image/jpeg', q || 0.85);
+  }
+  const loadScript = src => new Promise((ok, bad) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => bad(new Error(src)); document.head.appendChild(s); });
+  async function pdfLib() { if (!window.pdfjsLib) { await loadScript('vendor/pdf.min.js'); window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js'; } return window.pdfjsLib; }
+  function openPdf(file, buf) {
+    return pdfLib().then(lib => new Promise((ok, bad) => {
+      const task = lib.getDocument({data: buf});
+      task.onPassword = (update, reason) => {
+        sheet(`<h3>${reason === 2 ? 'Wrong password, try again' : 'This PDF has a password'}</h3><p>${esc(file.name)}</p>
+          <div class="f"><label for="pw">PDF password</label><input id="pw" type="password" autocomplete="off" inputmode="text"></div>
+          <p class="muted" style="margin-bottom:10px">Used once on this phone to open the file. Not saved, not sent.</p>
+          <div class="row"><button class="btn" data-x>Skip this PDF</button><button class="btn primary" data-ok>Open</button></div>`, s => {
+          const pw = $('#pw', s); setTimeout(() => pw.focus(), 50);
+          $('[data-x]', s).onclick = () => { closeSheet(); task.destroy(); bad({code: 'cancelled'}); };
+          const go = () => { const v = pw.value; busySheet('Opening the PDF…'); update(v); };
+          $('[data-ok]', s).onclick = go; pw.onkeydown = e => { if (e.key === 'Enter') go(); };
+          s.onclick = null; // only the buttons close this one
+        });
+      };
+      task.promise.then(ok, e => bad({code: e && e.code === 'cancelled' ? 'cancelled' : 'bad_pdf'}));
+    }));
+  }
+  const busySheet = msg => { sheet(`<h3>${esc(msg)}</h3><div class="loading" style="padding:16px"><div class="spin"></div></div>`); $('#sheet').onclick = null; };
+  /* real words, not the scrambled glyph codes some GE PDFs (e.g. MPOS) contain */
+  function readable(text) {
+    const t = text.replace(/\s+/g, ' ').trim(); if (t.length < 80) return false;
+    const printable = (t.match(/[\x20-\x7e -ɏ一-鿿]/g) || []).length / t.length;
+    const words = (t.toLowerCase().match(/\b(the|and|of|to|policy|premium|date|name|sum|plan|dan|yang|untuk|polisi)\b/g) || []).length;
+    return printable > 0.95 && words >= 3;
+  }
+  async function readPdf(file, free) {
+    const doc = await openPdf(file, new Uint8Array(await file.arrayBuffer()));
+    try {
+      busySheet('Reading the PDF on this phone…');
+      const n = doc.numPages, pages = [];
+      for (let i = 1; i <= Math.min(n, PDF_PAGES_TEXT); i++) {
+        const c = await (await doc.getPage(i)).getTextContent();
+        pages.push(c.items.map(it => it.str + (it.hasEOL ? '\n' : ' ')).join('').replace(/[ \t]+/g, ' ').trim());
+      }
+      const all = pages.map((p, i) => `--- page ${i + 1} ---\n${p}`).join('\n');
+      const textOk = readable(all);
+      // readable text is cheap and exact; scans and scrambled PDFs are sent as page pictures instead
+      const want = textOk ? Math.min(1, free) : Math.min(n, free, 6), imgs = [];
+      let thumb = '';
+      for (let i = 1; i <= Math.max(want, 1); i++) {
+        const page = await doc.getPage(i), v1 = page.getViewport({scale: 1}), v = page.getViewport({scale: Math.min(3, 1600 / Math.max(v1.width, v1.height))});
+        const cv = document.createElement('canvas'); cv.width = Math.round(v.width); cv.height = Math.round(v.height);
+        const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
+        await page.render({canvasContext: g, viewport: v}).promise;
+        if (i === 1) thumb = await toJpeg(cv, 160, 0.7);
+        if (i <= want) imgs.push((await toJpeg(cv, 1600)).split(',')[1]);
+      }
+      const used = textOk ? `text of ${Math.min(n, PDF_PAGES_TEXT)} page${n === 1 ? '' : 's'}` : `${imgs.length} of ${n} page${n === 1 ? '' : 's'} as pictures`;
+      return {kind: 'pdf', name: file.name, thumb, imgs, text: textOk ? all.slice(0, MAX_DOC) : '', label: `${file.name.replace(/\.pdf$/i, '')} · ${used}`, pages: n};
+    } finally { doc.destroy(); }
+  }
+  async function intake(files) {
+    const list = attList(attachTo), skipped = [];
+    for (const f of files) {
+      const free = MAX_IMAGES - imgCount(list), isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '');
+      try {
+        if (isPdf) {
+          busySheet('Opening the PDF…');
+          const it = await readPdf(f, free);
+          if (!it.imgs.length && !it.text) { skipped.push(f.name + ' (no room left)'); continue; }
+          list.push(Object.assign(it, {id: ++attSeq}));
+        } else if (/^image\//.test(f.type) || /\.(jpe?g|png|heic|webp)$/i.test(f.name || '')) {
+          if (free <= 0) { skipped.push(f.name || 'photo'); continue; }
+          busySheet('Preparing the photo…');
+          const full = await toJpeg(f, 1600);
+          list.push({id: ++attSeq, kind: 'img', name: f.name || 'photo', thumb: await toJpeg(f, 160, 0.7), imgs: [full.split(',')[1]], text: '', label: f.name && !/^image\.\w+$/.test(f.name) ? f.name : 'Photo'});
+        } else skipped.push(f.name + ' (not a photo or PDF)');
+      } catch (e) {
+        if (e && e.code === 'cancelled') continue;
+        skipped.push(f.name + (e && e.code === 'bad_pdf' ? ' (could not open)' : ' (could not read)'));
+      }
+    }
+    closeSheet(); render();
+    if (skipped.length) sheet(`<h3>Some files were not added</h3><p>${skipped.map(esc).join('<br>')}</p><p class="muted" style="margin:8px 0 12px">Up to ${MAX_IMAGES} photos or PDF pages per chat.</p><button class="btn block" data-x>OK</button>`, s => { $('[data-x]', s).onclick = closeSheet; });
+  }
+  ['#fCam', '#fUp'].forEach(id => { const el = $(id); if (el) el.addEventListener('change', e => { const f = [...(e.target.files || [])]; e.target.value = ''; if (f.length) intake(f); }); });
   function answerHtml(a, i) {
     const nc = a.kind === 'not_covered';
     const conf = a.confidence === 'high' ? '<span class="pill ok">Found in ePartner documents</span>' : a.confidence === 'low' || nc ? '<span class="pill err">Not sure, please double-check</span>' : '<span class="pill warn">Check the source to be safe</span>';
@@ -287,6 +413,12 @@
   /* ---------- events ---------- */
   function wire(root) {
     $$('[data-g]', root).forEach(b => b.onclick = () => { current.matched = null; go('#/g/' + b.dataset.g); });
+    $$('[data-cam]', root).forEach(b => b.onclick = () => pickFiles(b.dataset.cam, true));
+    $$('[data-up]', root).forEach(b => b.onclick = () => pickFiles(b.dataset.up, false));
+    $$('[data-rm]', root).forEach(b => b.onclick = () => {
+      const [where, id] = b.dataset.rm.split(':'), list = attList(where), k = list.findIndex(x => String(x.id) === id);
+      if (k >= 0) list.splice(k, 1); render();
+    });
     const askBtn = $('[data-ask]', root), q = $('#q', root);
     if (askBtn) askBtn.onclick = () => ask(q.value);
     if (q) q.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(q.value); } };
