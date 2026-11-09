@@ -121,3 +121,13 @@ details.sources li{font-size:13px;color:var(--muted);margin:5px 0}
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:70;background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;font-size:14px;max-width:90vw;text-align:center}
 .foot{text-align:center;color:var(--muted);font-size:12.5px;margin:22px 10px 0}
 .foot button{color:var(--muted);text-decoration:underline;font-size:12.5px}
+/* chat: follow-up questions */
+.turn{scroll-margin-top:70px}
+.turn + .turn{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
+.youasked.fu{background:var(--ink);color:#CFC8B8;border:0;margin-left:28px}
+.youasked.fu b{color:#fff}
+.follow{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;margin:14px 0}
+.follow label{display:block;font-weight:600;margin-bottom:6px}
+.follow textarea{width:100%;min-height:64px;resize:vertical;border-radius:12px;border:1px solid var(--line);background:#FBF8F2;padding:10px 12px;font-size:16px;line-height:1.4}
+.follow .row{margin-top:8px}
+.follow .muted{font-size:12px;margin-top:6px}

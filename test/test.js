@@ -69,6 +69,28 @@ for (const [q, re] of AI) t(`AI search for "${q}" finds ${re}`, () => {
   const p = fs.readFileSync(path.join(__dirname, 'prompts', S.slug(q) + '.txt'), 'utf8');
   assert.ok(/Use ONLY the SOURCES/.test(p) && p.length < 40000, 'prompt rules or size');
 });
+console.log('\n7. Chat: follow-up questions remember the conversation (only for that request)');
+t('follow-up sends the earlier question to the AI and still finds the right documents', () => {
+  const q = 'how about for SRM?', r = S.call({code: 'test-team-code', op: 'ioask', question: q, history: [{q: 'SPYE2 free look period how many days?', a: 'SPYE2 has a 15-day free-look period.'}]});
+  assert.ok(!r.error, r.error);
+  assert.ok(r.sources.slice(0, 5).some(s => /Smart Revive Max/i.test(s.h)), 'no SRM document in top 5');
+  const p = fs.readFileSync(path.join(__dirname, 'prompts', S.slug(q) + '.txt'), 'utf8');
+  assert.ok(/CONVERSATION SO FAR[\s\S]*SPYE2 free look period/.test(p), 'history missing from prompt');
+  assert.ok(/Facts must still come from the SOURCES/.test(p), 'follow-up rule missing');
+});
+t('only the last 4 turns are sent, each trimmed', () => {
+  const q = 'what is the GE5 blood test', h = Array.from({length: 10}, (_, i) => ({q: 'old question number ' + i, a: 'x'.repeat(5000)}));
+  S.call({code: 'test-team-code', op: 'ioask', question: q, history: h});
+  const p = fs.readFileSync(path.join(__dirname, 'prompts', S.slug(q) + '.txt'), 'utf8');
+  assert.ok(!/old question number 5/.test(p) && /old question number 6/.test(p) && /old question number 9/.test(p), 'wrong turns kept');
+  assert.ok(!/x{1501}/.test(p), 'answer not trimmed');
+});
+t('a first question has no conversation block', () => {
+  const p = fs.readFileSync(path.join(__dirname, 'prompts', S.slug('SPYE2 free look period how many days?') + '.txt'), 'utf8');
+  assert.ok(!/CONVERSATION SO FAR \(oldest first\)/.test(p));
+});
+t('bad history is ignored, not an error', () => assert.ok(!S.call({code: 'test-team-code', op: 'ioask', question: 'what is GE5', history: 'nonsense'}).error));
+t('the app never saves questions on the phone', () => assert.ok(!/save\('nnaio\.recent', (?!null)/.test(fs.readFileSync(path.join(__dirname, '..', 'docs', 'app.js'), 'utf8'))));
 t('question too long is refused', () => assert.strictEqual(S.call({code: 'test-team-code', op: 'ioask', question: 'x'.repeat(700)}).error, 'invalid_request'));
 t('short plan code "sig" does not match "signature"', () => assert.ok(!M.terms('change of signature', SYN).includes('smartinvest')));
 

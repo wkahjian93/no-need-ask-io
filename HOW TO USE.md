@@ -9,8 +9,9 @@
 3. Type your question in English, 中文 or BM, then tap **Show me how**.
    - Common questions such as commission, login, forms, e-policy or ICM open a step-by-step guide right away, with screenshots. Tap a picture to zoom in.
    - Questions about rules or facts (e.g. "SPYE2 free-look how many days?") go to the AI. Wait 10 to 30 seconds. The answer shows which ePartner document it came from.
-4. **Copy steps** puts the steps on your clipboard so you can paste them into WhatsApp.
-5. Still stuck? The app sends you to ICM or Agent Careline 03-4259 8111. Tell your IO what you already tried.
+4. **Ask a follow-up** in the box under the answer, like a chat. For example: "How about for SRM?" or "那个表格在哪里？". The AI remembers the chat until you tap **New question** or refresh the app. Nothing is saved, on the phone or on the server.
+5. **Copy steps** puts the steps on your clipboard so you can paste them into WhatsApp.
+6. Still stuck? The app sends you to ICM or Agent Careline 03-4259 8111. Tell your IO what you already tried.
 
 **Never type client details** (IC, phone, policy number). The app spots them and asks you to remove them before anything is sent.
 
@@ -21,18 +22,19 @@
   ```
   Then in the app: **⋯ → Owner: upload guides and library**, pick every file in `private/build/` that starts with `nnaio_`, and enter your owner code.
 - **New screenshots:** save them as PNG in `private/shots/` (red box #ff1f3d around the spot to tap), then run `node tools/find-boxes.js` and `tools/convert-shots.ps1`, then rebuild.
-- **AI cost:** each AI question is one call on the shared team daily limit (same as Form Filler and What-If). Instant guides cost nothing.
+- **AI cost:** each AI question is one call on the shared team daily limit (same as Form Filler and What-If). Each follow-up is one more call. Instant guides cost nothing. A chat stops at 8 questions and asks the agent to start fresh.
 - **What is private:** everything in `private/` (GE internal PDF text, screenshots, guides). It reaches phones only after team-code sign-in, and the PDF library never leaves the team server. The public app code contains no GE content.
 
 ## Test run
 ```
 node test/test.js
 ```
-This runs 78 checks:
+This runs 83 checks:
 - the 17 common questions and 14 messy real-life wordings each go to the right guide;
 - fact questions go to the AI;
 - client details are caught;
-- the real team server code (run in memory) refuses uploads from agents, and its search finds the right GE document.
+- the real team server code (run in memory) refuses uploads from agents, and its search finds the right GE document;
+- follow-up questions carry only the last 4 turns of the chat, and the app saves no questions.
 
 The last result is in `test/last-run.txt`.
 

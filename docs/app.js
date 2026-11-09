@@ -77,7 +77,7 @@
   const pathHtml = p => p && p.length ? `<div class="path">${p.map(esc).map(x => `<span>${x}</span>`).join('<i>›</i>')}</div>` : '';
 
   /* ---------- routing: #/  #/g/<id>  #/ask  #/all ---------- */
-  let current = {q: '', ai: null, aiErr: null, aiFor: '', busy: false};
+  let current = {q: '', turns: []}; // this chat only lives in memory: refresh = fresh start
   function go(hash) { if (location.hash === hash) render(); else location.hash = hash; }
   addEventListener('hashchange', () => { render(); scrollTo(0, 0); });
 
@@ -95,17 +95,18 @@
   function render() {
     const app = $('#app'), h = location.hash || '#/';
     if (h.startsWith('#/g/')) app.innerHTML = guideView(decodeURIComponent(h.slice(4)));
-    else if (h === '#/ask') app.innerHTML = askView();
+    else if (h === '#/ask' && (current.turns || []).length) app.innerHTML = askView();
+    else if (h === '#/ask') { history.replaceState(null, '', '#/'); app.innerHTML = homeView(); } // chat is gone after a refresh: start fresh
     else if (h === '#/all') app.innerHTML = allView();
     else app.innerHTML = homeView();
     wireBar(app); wire(app);
+    if (h === '#/ask' && current.scrollTo != null) { const el = $('#t' + current.scrollTo); current.scrollTo = null; if (el) setTimeout(() => el.scrollIntoView({block: 'start'}), 0); }
   }
 
   /* ---------- home ---------- */
   function homeView() {
     const g = PACK ? PACK.guides : [];
     const pop = POPULAR.map(id => g.find(x => x.id === id)).filter(Boolean);
-    const recent = load('nnaio.recent', []);
     let status = '';
     if (!session()) status = `<div class="card"><h2>Get started</h2><p style="margin-bottom:12px">Sign in once with your name and the REDEFINE team code to download the ePartner guides. After that the guides work even without internet.</p><button class="btn primary block" data-signin>Sign in</button></div>`;
     else if (!PACK) status = packState && packState !== 'ok'
@@ -121,7 +122,6 @@
         <div class="chips">${pop.slice(0, 8).map(x => `<button class="chip" data-g="${x.id}">${esc(x.title.split(' (')[0].split(' / ')[0])}</button>`).join('')}</div>
       </section>
       ${status}
-      ${recent.length ? `<h2 class="sec">Asked recently on this phone</h2>${recent.slice(0, 4).map(r => `<button class="item" data-rq="${esc(r)}"><div class="t"><b>${esc(r)}</b></div>${ICON.chev}</button>`).join('')}` : ''}
       ${pop.length ? `<h2 class="sec">The 17 questions agents ask most</h2>${pop.map((x, i) => item(x, i + 1)).join('')}
         <button class="btn block" data-all style="margin-top:4px">See all ${g.length} guides</button>` : ''}
       <p class="foot">Guides from ePartner, checked ${PACK ? esc(fmtDate(PACK.built)) : '9 Nov 2026'}. ePartner changes, so if a screen looks different, tell Kah Jian.<br>
@@ -157,7 +157,7 @@
       ${g.tips && g.tips.length ? `<div class="tips"><h3>Good to know</h3><ul>${g.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>` : ''}
       ${opts.inline ? '' : `<p class="src">Source: ${esc(g.src || 'ePartner Study Pack')} · screenshots 9 Nov 2026. Red boxes show where to tap.</p>
       <div class="row" style="margin-bottom:10px"><a class="btn dark" href="${CFG.epartner}" target="_blank" rel="noopener">Open ePartner</a><button class="btn" data-copy="${g.id}">Copy steps</button></div>
-      ${asked ? `<button class="btn block" data-ai>${ICON.spark} Not what I asked, ask AI</button>` : `<button class="btn block" data-followup="${g.id}">${ICON.spark} Ask another question</button>`}
+      ${asked ? `<button class="btn block" data-ai>${ICON.spark} Not what I asked, ask AI</button><div data-from="${g.id}" style="margin-top:12px">${composer()}</div>` : `<button class="btn block" data-followup="${g.id}">${ICON.spark} Ask another question</button>`}
       ${helpBox()}`}
     </main>`;
   }
@@ -167,39 +167,63 @@
   }
 
   /* ---------- ask flow ---------- */
+  /* client details check before anything is sent; field = the textarea to put the question back in */
+  function cleanFirst(q, field, then) {
+    const pd = M.personalData(q);
+    if (!pd.length) return then(q);
+    sheet(`<h3>Remove client details first</h3><p>Your question has what looks like ${esc(pd.join(', '))}. Client details should never be typed into this app. The steps are the same for every client.</p>
+      <div class="cmp">${esc(M.stripPersonal(q))}</div>
+      <div class="row"><button class="btn" data-x>Edit my question</button><button class="btn primary" data-ok>Use this version</button></div>`, el => {
+      $('[data-x]', el).onclick = () => { closeSheet(); const t = $(field); if (t) { t.value = q; t.focus(); } };
+      $('[data-ok]', el).onclick = () => { closeSheet(); then(M.stripPersonal(q)); };
+    });
+  }
   function ask(q) {
     q = String(q || '').trim();
     if (q.length < 3) { toast('Type your question first'); return; }
-    const pd = M.personalData(q);
-    if (pd.length) {
-      sheet(`<h3>Remove client details first</h3><p>Your question has what looks like ${esc(pd.join(', '))}. Client details should never be typed into this app. The steps are the same for every client.</p>
-        <div class="cmp">${esc(M.stripPersonal(q))}</div>
-        <div class="row"><button class="btn" data-x>Edit my question</button><button class="btn primary" data-ok>Use this version</button></div>`, el => {
-        $('[data-x]', el).onclick = () => { closeSheet(); const t = $('#q'); if (t) { t.value = q; t.focus(); } };
-        $('[data-ok]', el).onclick = () => { closeSheet(); ask(M.stripPersonal(q)); };
-      });
-      return;
-    }
-    const rec = load('nnaio.recent', []).filter(x => x !== q); rec.unshift(q); save('nnaio.recent', rec.slice(0, 8));
-    current = {q, ai: null, aiErr: null, aiFor: '', busy: false};
-    if (!PACK) { current.matched = null; go('#/ask'); askAI(); return; }
-    const b = M.best(q, PACK.guides, PACK.syn);
-    current.match = b;
-    if (b.confident) { current.matched = b.top.guide.id; go('#/g/' + b.top.guide.id); return; }
-    current.matched = null; go('#/ask'); askAI();
+    cleanFirst(q, '#q', q => {
+      current = {q, turns: []};
+      if (!PACK) { startAI(); return; }
+      const b = M.best(q, PACK.guides, PACK.syn);
+      current.match = b;
+      if (b.confident) { current.matched = b.top.guide.id; go('#/g/' + b.top.guide.id); return; }
+      startAI();
+    });
   }
-  async function askAI() {
-    const q = current.q; if (!q || current.busy) return;
-    if (!session()) { current.aiErr = 'unauthorized'; render(); return; }
-    current.busy = true; current.ai = null; current.aiErr = null; current.aiFor = q;
+  /* the first question goes to the AI (no guide matched, or "not what I asked") */
+  function startAI() { current.matched = null; current.turns = [{q: current.q}]; askAI(0); }
+
+  /* chat: follow-up questions always go to the AI, with the last few turns so it knows what "that" means */
+  const MAX_TURNS = 8;
+  function followUp(q2, fromGuide) {
+    q2 = String(q2 || '').trim();
+    if (q2.length < 2) { toast('Type your follow-up first'); return; }
+    if (current.turns.some(t => t.busy)) return;
+    cleanFirst(q2, '#fq', q2 => {
+      if (fromGuide) current.turns = [{q: current.q, guide: fromGuide}];
+      current.turns.push({q: q2});
+      askAI(current.turns.length - 1);
+    });
+  }
+  function turnSummary(t) {
+    if (t.guide) { const g = PACK && PACK.guides.find(x => x.id === t.guide); return g ? `Showed the step-by-step guide "${g.title}": ` + g.steps.map((s, i) => `${i + 1}. ${s.t}`).join(' ') : ''; }
+    const a = t.ai; if (!a) return '';
+    return [a.title, a.answer].concat((a.steps || []).map((s, i) => `${i + 1}. ${s.t || s.text || ''}`)).filter(Boolean).join(' ');
+  }
+  async function askAI(i) {
+    const cur = current, t = cur.turns[i]; if (!t || t.busy) return;
+    t.ai = null; t.err = null;
+    if (!session()) { t.err = 'unauthorized'; if (location.hash !== '#/ask') go('#/ask'); else render(); return; }
+    t.busy = true; cur.scrollTo = i;
     if (location.hash !== '#/ask') go('#/ask'); else render();
+    const history = cur.turns.slice(0, i).filter(x => x.guide || x.ai).slice(-4).map(x => ({q: x.q, a: turnSummary(x).slice(0, 1500)}));
     try {
-      const r = await post({op: 'ioask', question: q});
+      const r = await post(Object.assign({op: 'ioask', question: t.q}, history.length ? {history} : {}));
       let a; try { a = parseJSON(r.text); } catch (e) { throw {code: 'invalid_json'}; }
       a.srcList = r.sources || [];
-      if (current.aiFor === q) current.ai = a;
-    } catch (e) { if (current.aiFor === q) current.aiErr = e.code || 'upstream_error'; }
-    finally { current.busy = false; if (location.hash === '#/ask') render(); }
+      t.ai = a;
+    } catch (e) { t.err = e.code || 'upstream_error'; }
+    finally { t.busy = false; if (current === cur && location.hash === '#/ask') { cur.scrollTo = i; render(); } }
   }
   function parseJSON(text) {
     const fence = String(text).match(/```(?:json)?\s*([\s\S]*?)```/), a = text.indexOf('{'), b = text.lastIndexOf('}');
@@ -216,20 +240,31 @@
     rate_limited: 'The AI is busy. Wait a minute and try again.', invalid_json: 'The AI answer came back garbled. Try asking again.'
   };
   function askView() {
-    const q = current.q, b = current.match;
-    if (!q) return bar('No Need Ask IO', '', true) + `<main class="wrap"><p class="empty">Ask a question on the home screen.</p></main>`;
-    const others = b && b.others ? b.others.filter(r => !(current.ai && r.guide.id === current.ai.guide)) : [];
-    const sugg = others.length ? `<h2 class="sec">Other guides that may help</h2>${others.map((r, i) => item(r.guide, i + 1)).join('')}` : '';
-    let body = '';
-    if (current.busy) body = `<div class="loading"><div class="spin"></div><b style="color:var(--text)">Searching the ePartner library…</b>Checking GE's guides and manuals. Usually 10 to 30 seconds.</div>`;
-    else if (current.aiErr) body = `<div class="notice">${esc(AI_ERR[current.aiErr] || 'Something went wrong on the team server. Try again in a moment.')}</div>
-      ${current.aiErr === 'unauthorized' ? '<button class="btn primary block" data-signin style="margin-bottom:12px">Sign in</button>' : '<button class="btn block" data-ai style="margin-bottom:12px">Try again</button>'}`;
-    else if (current.ai) body = answerHtml(current.ai);
-    return bar('No Need Ask IO', 'Answer', true) + `<main class="wrap">
-      <div class="youasked">You asked: <b>${esc(q)}</b></div>
-      ${body}${sugg}${current.busy ? '' : helpBox()}</main>`;
+    const turns = current.turns || [];
+    if (!turns.length) return bar('No Need Ask IO', '', true) + `<main class="wrap"><p class="empty">Ask a question on the home screen.</p></main>`;
+    const busy = turns.some(t => t.busy), last = turns[turns.length - 1];
+    const html = turns.map((t, i) => {
+      let body = '';
+      if (t.guide) { const g = PACK && PACK.guides.find(x => x.id === t.guide); body = g ? `<button class="item" data-g="${g.id}"><span class="n">${ICON.spark}</span><div class="t"><b>${esc(g.title)}</b><span>Step-by-step guide with screenshots</span></div>${ICON.chev}</button>` : ''; }
+      else if (t.busy) body = `<div class="loading"><div class="spin"></div><b style="color:var(--text)">Searching the ePartner library…</b>Checking GE's guides and manuals. Usually 10 to 30 seconds.</div>`;
+      else if (t.err) body = `<div class="notice">${esc(AI_ERR[t.err] || 'Something went wrong on the team server. Try again in a moment.')}</div>
+        ${t.err === 'unauthorized' ? '<button class="btn primary block" data-signin style="margin-bottom:12px">Sign in</button>' : `<button class="btn block" data-ai="${i}" style="margin-bottom:12px">Try again</button>`}`;
+      else if (t.ai) body = answerHtml(t.ai, i);
+      return `<section class="turn" id="t${i}"><div class="youasked${i ? ' fu' : ''}">${i ? 'Follow-up' : 'You asked'}: <b>${esc(t.q)}</b></div>${body}</section>`;
+    }).join('');
+    const b = current.match, first = turns[0];
+    const others = turns.length === 1 && b && b.others ? b.others.filter(r => !(first.ai && r.guide.id === first.ai.guide)) : [];
+    const sugg = !busy && others.length ? `<h2 class="sec">Other guides that may help</h2>${others.map((r, i) => item(r.guide, i + 1)).join('')}` : '';
+    const box = busy || last.err === 'unauthorized' ? '' : turns.length >= MAX_TURNS
+      ? `<div class="notice">This chat is getting long. Start a new question so the AI stays accurate.</div><button class="btn primary block" data-new style="margin-bottom:12px">New question</button>`
+      : composer();
+    return bar('No Need Ask IO', turns.length > 1 ? `Chat · ${turns.length} questions` : 'Answer', true) + `<main class="wrap">${html}${box}${sugg}${busy ? '' : helpBox()}</main>`;
   }
-  function answerHtml(a) {
+  const composer = () => `<div class="follow"><label for="fq">Ask a follow-up</label>
+    <textarea id="fq" maxlength="500" placeholder="e.g. How about for SRM?  /  那个表格在哪里？  /  Kalau client bawah 16 tahun?"></textarea>
+    <div class="row"><button class="btn" data-new>New question</button><button class="btn primary" data-send>Send</button></div>
+    <p class="muted">The AI remembers this chat. No client details.</p></div>`;
+  function answerHtml(a, i) {
     const nc = a.kind === 'not_covered';
     const conf = a.confidence === 'high' ? '<span class="pill ok">Found in ePartner documents</span>' : a.confidence === 'low' || nc ? '<span class="pill err">Not sure, please double-check</span>' : '<span class="pill warn">Check the source to be safe</span>';
     const g = a.guide && PACK && PACK.guides.find(x => x.id === a.guide);
@@ -242,27 +277,36 @@
       ${g ? `<div style="margin-top:6px">${guideView(g.id, {inline: true})}</div><button class="btn block" data-g="${g.id}" style="margin-bottom:12px">Open the full "${esc(g.title)}" guide</button>` : ''}
       ${used.length ? `<details class="sources"><summary>Where this comes from (${used.length})</summary><ul>${used.map(s => `<li>${esc(s.s)}: ${esc(s.h)}</li>`).join('')}</ul></details>` : ''}
       <p class="src">AI can make mistakes. For product rules and numbers, open the latest PDF on ePartner before telling a client.</p>
-      <div class="row" style="margin-bottom:10px"><a class="btn dark" href="${CFG.epartner}" target="_blank" rel="noopener">Open ePartner</a><button class="btn" data-copyai>Copy answer</button></div>`;
+      <div class="row" style="margin-bottom:10px"><a class="btn dark" href="${CFG.epartner}" target="_blank" rel="noopener">Open ePartner</a><button class="btn" data-copyai="${i}">Copy answer</button></div>`;
   }
 
   /* ---------- events ---------- */
   function wire(root) {
     $$('[data-g]', root).forEach(b => b.onclick = () => { current.matched = null; go('#/g/' + b.dataset.g); });
-    $$('[data-rq]', root).forEach(b => b.onclick = () => ask(b.dataset.rq));
     const askBtn = $('[data-ask]', root), q = $('#q', root);
     if (askBtn) askBtn.onclick = () => ask(q.value);
     if (q) q.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(q.value); } };
-    $$('[data-ai]', root).forEach(b => b.onclick = () => { current.matched = null; askAI(); });
+    $$('[data-ai]', root).forEach(b => b.onclick = () => { if (b.dataset.ai === '') startAI(); else askAI(+b.dataset.ai); });
     $$('[data-followup]', root).forEach(b => b.onclick = () => go('#/'));
+    $$('[data-new]', root).forEach(b => b.onclick = () => { current = {q: '', turns: []}; go('#/'); setTimeout(() => { const t = $('#q'); if (t) t.focus(); }, 50); });
+    const fq = $('#fq', root), send = $('[data-send]', root);
+    if (fq && send) {
+      const from = root.querySelector('[data-from]'), fire = () => followUp(fq.value, from ? from.dataset.from : null);
+      send.onclick = fire;
+      fq.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); fire(); } };
+    }
     $$('[data-shot]', root).forEach(b => b.onclick = () => openViewer(b.dataset.shot, b.dataset.cap));
-    $$('[data-signin]', root).forEach(b => b.onclick = () => signIn().then(ok => { if (ok) { render(); syncPack(); if (current.aiErr === 'unauthorized') askAI(); } }));
+    $$('[data-signin]', root).forEach(b => b.onclick = () => signIn().then(ok => {
+      if (!ok) return; render(); syncPack();
+      const i = (current.turns || []).findIndex(t => t.err === 'unauthorized'); if (i >= 0) askAI(i);
+    }));
     $$('[data-retry]', root).forEach(b => b.onclick = () => { packState = null; render(); syncPack(); });
     const all = $('[data-all]', root); if (all) all.onclick = () => go('#/all');
     const m2 = $('[data-menu2]', root); if (m2) m2.onclick = menu;
     $$('[data-copy]', root).forEach(b => b.onclick = () => copy(copyText(PACK.guides.find(x => x.id === b.dataset.copy))));
-    const ca = $('[data-copyai]', root); if (ca) ca.onclick = () => {
-      const a = current.ai; copy(`*${a.title}*\n${a.answer}\n` + (a.steps || []).map((s, i) => `${i + 1}. ${s.t || s.text}`).join('\n') + '\n\n(from No Need Ask IO, AI answer: please double-check)');
-    };
+    $$('[data-copyai]', root).forEach(ca => ca.onclick = () => {
+      const a = current.turns[+ca.dataset.copyai].ai; copy(`*${a.title}*\n${a.answer}\n` + (a.steps || []).map((s, i) => `${i + 1}. ${s.t || s.text}`).join('\n') + '\n\n(from No Need Ask IO, AI answer: please double-check)');
+    });
   }
   async function copy(t) { try { await navigator.clipboard.writeText(t); toast('Copied. Paste it in WhatsApp.'); } catch (e) { sheet(`<h3>Copy this</h3><textarea style="width:100%;min-height:200px">${esc(t)}</textarea><button class="btn block" data-x>Close</button>`, el => { $('[data-x]', el).onclick = closeSheet; }); } }
 
@@ -345,6 +389,7 @@
   }
 
   /* ---------- start ---------- */
+  save('nnaio.recent', null); // questions are never kept on the phone (older versions saved the last few)
   render();
   DB.get('pack').then(p => { if (packOk(p)) { PACK = p; render(); } }).catch(() => {}).finally(() => syncPack());
   window.__nna = {ask, state: () => ({PACK: !!PACK, packState, current})}; // for tests

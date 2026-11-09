@@ -86,7 +86,14 @@
   ok  AI search for "客户想换受益人要准备什么文件？" finds /Change of Nominee/i
   ok  AI search for "Client admitted to hospital, how does the guarantee letter work?" finds /Healthcare|Guarantee|Claims and Healthcare/i
   ok  AI search for "what blood test is GE5" finds /Blood Test|GE5|New Business Medical/i
+
+7. Chat: follow-up questions remember the conversation (only for that request)
+  ok  follow-up sends the earlier question to the AI and still finds the right documents
+  ok  only the last 4 turns are sent, each trimmed
+  ok  a first question has no conversation block
+  ok  bad history is ignored, not an error
+  ok  the app never saves questions on the phone
   ok  question too long is refused
   ok  short plan code "sig" does not match "signature"
 
-78 passed, 0 failed
+83 passed, 0 failed
