@@ -216,9 +216,13 @@
     if (!session()) { t.err = 'unauthorized'; if (location.hash !== '#/ask') go('#/ask'); else render(); return; }
     t.busy = true; cur.scrollTo = i;
     if (location.hash !== '#/ask') go('#/ask'); else render();
-    const history = cur.turns.slice(0, i).filter(x => x.guide || x.ai).slice(-4).map(x => ({q: x.q, a: turnSummary(x).slice(0, 1500)}));
+    // earlier questions that failed still count as context ("how about SRM?" needs the question before it)
+    const history = cur.turns.slice(0, i).slice(-4).map(x => ({q: x.q, a: (turnSummary(x) || '(no answer was shown)').slice(0, 1500)}));
+    const body = Object.assign({op: 'ioask', question: t.q}, history.length ? {history} : {});
     try {
-      const r = await post(Object.assign({op: 'ioask', question: t.q}, history.length ? {history} : {}));
+      let r;
+      try { r = await post(body); }
+      catch (e) { if (e.code !== 'upstream_error') throw e; r = await post(body); } // one quiet retry for a server hiccup
       let a; try { a = parseJSON(r.text); } catch (e) { throw {code: 'invalid_json'}; }
       a.srcList = r.sources || [];
       t.ai = a;
