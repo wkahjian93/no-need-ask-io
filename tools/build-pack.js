@@ -62,7 +62,8 @@ for (const sec of splitBy(read('ePartner_full_crawl.md'), /^## PAGE /)) {
   push('ePartner page', sec.head, body);
 }
 // NB panel clinics, one chunk group per area
-for (const sec of splitBy(read('ePartner_NB_Panel_Clinics.md'), /^## /)) push('NB Panel Clinic Listing (9 Nov 2026)', 'Panel clinics: ' + sec.head, sec.body, 2400);
+// (from GE_Panel_Clinics_Nov2026.csv: one line per clinic, tests spelled out, so "treadmill in Kulim" finds it)
+for (const sec of require('./clinics.js').libraryText()) push('NB Panel Clinic Listing (Nov 2026)', 'Panel clinics: ' + sec.head, sec.body, 2400);
 
 // split into server parts of <= 3.5 MB each
 const parts = []; let cur = [], size = 0;

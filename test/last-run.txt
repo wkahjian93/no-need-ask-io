@@ -109,7 +109,12 @@
   ok  distance check: KL to Penang is about 290 km in a straight line
   ok  postcode 11900 is Bayan Lepas, Penang
   ok  5 nearest to 11900 are all Penang island clinics, nearest first
-  ok  typed towns work: "Bayan Lepas", "ipoh", "Taman Melawati"
+  ok  typed towns work: "Bayan Lepas", "ipoh", "Taman Melawati", "Farlim"
+  ok  "Taman Melawati" (KL) is not mixed up with Bukit Melawati (Kuala Selangor)
+  ok  "Farlim" puts O2 Klinik (Farlim) first
+  ok  searching by clinic name: "pan-medic" finds all 3 Pan-Medic clinics; postcodes are not name searches
+  ok  clinics come from the new CSV listing, each with its state and area
+  ok  AI library spells out the tests, so "treadmill test in Kulim" finds the Kulim clinics
   ok  an unknown postcode falls back to its area, marked rough
   ok  nonsense place gives no result
   ok  "needs a treadmill ECG" only returns clinics that list TMX2
@@ -118,4 +123,4 @@
   ok  question too long is refused
   ok  short plan code "sig" does not match "signature"
 
-101 passed, 0 failed
+106 passed, 0 failed

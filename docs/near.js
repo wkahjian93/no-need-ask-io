@@ -43,12 +43,34 @@
     if (geo.town[q]) return {at: geo.town[q], label: title(q)};
     const keys = Object.keys(geo.town).filter(k => norm(k) === q || norm(k).includes(q) || (q.includes(norm(k)) && norm(k).length >= 4));
     if (keys.length) { keys.sort((a, b) => (norm(a) === q ? -1 : 0) - (norm(b) === q ? -1 : 0) || Math.abs(norm(a).length - q.length) - Math.abs(norm(b).length - q.length)); return {at: geo.town[keys[0]], label: title(keys[0])}; }
-    // a place GeoNames doesn't list (e.g. a taman): use the clinics whose address mentions it
-    const words = q.split(' ').filter(w => w.length > 2);
-    const hits = (clinics || []).filter(c => { const a = norm(c.a); return words.length && words.every(w => a.includes(w)); });
-    return hits.length ? {at: avg(hits.map(c => [c.lat, c.lng])), label: title(raw), rough: true} : null;
+    // a place GeoNames doesn't list (a taman, "Farlim", an area in GE's list): use the clinics that mention it,
+    // the exact phrase first ("TAMAN MELAWATI"), else every word
+    const hay = c => ' ' + norm(c.n + ' ' + c.a + ' ' + (c.ar || '')) + ' ';
+    const phrase = ' ' + norm(raw) + ' ', words = q.split(' ').filter(w => w.length > 2);
+    const rawU = raw.toUpperCase().replace(/\s+/g, ' ');
+    let hits = (clinics || []).filter(c => (c.a + ' ' + c.n).toUpperCase().includes(rawU));
+    if (!hits.length) hits = (clinics || []).filter(c => hay(c).includes(phrase));
+    if (!hits.length) hits = (clinics || []).filter(c => { const h = hay(c); return words.length && words.every(w => new RegExp('\\b' + w).test(h)); });
+    return hits.length ? {at: centre(hits), label: title(raw), rough: true} : null;
+  }
+  /* the biggest group of clinics close together (a name like "Melawati" can also match a place 30 km away),
+     using exactly placed clinics when the group has any */
+  function centre(hits) {
+    let best = hits;
+    if (hits.length > 1) {
+      best = hits.map(h => hits.filter(o => km([h.lat, h.lng], [o.lat, o.lng]) <= 12)).sort((a, b) => b.length - a.length)[0];
+    }
+    const exact = best.filter(c => c.how === 'name' || c.how === 'street');
+    return avg((exact.length ? exact : best).map(c => [c.lat, c.lng]));
   }
 
-  const api = {km, nearest, place, NEEDS, has};
+  /* clinics whose name contains what was typed ("o2 klinik", "pan-medic") */
+  function byName(text, clinics, max) {
+    const q = String(text || '').toUpperCase().replace(/\s+/g, ' ').trim();
+    if (q.length < 3 || /^\d+$/.test(q)) return [];
+    return (clinics || []).filter(c => c.n.toUpperCase().includes(q)).slice(0, max || 8);
+  }
+
+  const api = {km, nearest, place, byName, NEEDS, has};
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.NNNear = api;
 })(this);

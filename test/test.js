@@ -141,8 +141,28 @@ t('5 nearest to 11900 are all Penang island clinics, nearest first', () => {
   assert.ok(r.every(x => /PENANG|PULAU PINANG|BAYAN|GELUGOR|JELUTONG|AIR ITAM|GEORGE ?TOWN|BALIK PULAU|\b11\d{3}\b/i.test(x.c.a)), r.map(x => x.c.a).join(' / '));
   assert.ok(r.every((x, i) => !i || r[i - 1].km <= x.km));
 });
-t('typed towns work: "Bayan Lepas", "ipoh", "Taman Melawati"', () => {
-  for (const [q, lat] of [['Bayan Lepas', 5.3], ['ipoh', 4.6], ['Taman Melawati', 3.2]]) { const p = NEAR.place(q, CP.geo, CP.clinics); assert.ok(p && Math.abs(p.at[0] - lat) < 0.15, q + ' -> ' + JSON.stringify(p)); }
+t('typed towns work: "Bayan Lepas", "ipoh", "Taman Melawati", "Farlim"', () => {
+  for (const [q, lat, lng] of [['Bayan Lepas', 5.3, 100.28], ['ipoh', 4.6, 101.08], ['Taman Melawati', 3.21, 101.72], ['Farlim', 5.39, 100.28], ['Sungai Besar', 3.67, 100.98], ['Kajang', 2.99, 101.79]]) {
+    const p = NEAR.place(q, CP.geo, CP.clinics);
+    assert.ok(p && Math.abs(p.at[0] - lat) < 0.15 && Math.abs(p.at[1] - lng) < 0.2, q + ' -> ' + JSON.stringify(p));
+  }
+});
+t('"Taman Melawati" (KL) is not mixed up with Bukit Melawati (Kuala Selangor)', () => {
+  const p = NEAR.place('Taman Melawati', CP.geo, CP.clinics), first = NEAR.nearest(CP.clinics, p.at, {n: 1})[0];
+  assert.ok(p.at[1] > 101.6 && /MELAWATI|53100/.test(first.c.a), JSON.stringify(p) + ' ' + first.c.n);
+});
+t('"Farlim" puts O2 Klinik (Farlim) first', () => assert.strictEqual(NEAR.nearest(CP.clinics, NEAR.place('Farlim', CP.geo, CP.clinics).at, {n: 1})[0].c.n, 'O2 KLINIK (FARLIM)'));
+t('searching by clinic name: "pan-medic" finds all 3 Pan-Medic clinics; postcodes are not name searches', () => {
+  assert.strictEqual(NEAR.byName('pan-medic', CP.clinics).length, 3);
+  assert.strictEqual(NEAR.byName('11900', CP.clinics).length, 0);
+});
+t('clinics come from the new CSV listing, each with its state and area', () => {
+  assert.ok(CP.clinics.every(c => c.st && c.ar), 'state/area missing');
+  assert.ok(CP.clinics.some(c => c.st === 'Pulau Pinang') && CP.clinics.some(c => c.st === 'Sabah'));
+});
+t('AI library spells out the tests, so "treadmill test in Kulim" finds the Kulim clinics', () => {
+  const lib = CLN.libraryText().find(g => /Kulim/.test(g.head));
+  assert.ok(lib && /Treadmill\/Stress Electrocardiogram/.test(CLN.libraryText().map(g => g.body).join('\n')));
 });
 t('an unknown postcode falls back to its area, marked rough', () => { const p = NEAR.place('16479', CP.geo, CP.clinics); assert.ok(p && p.rough); });
 t('nonsense place gives no result', () => assert.strictEqual(NEAR.place('zzqxw', CP.geo, CP.clinics), null));

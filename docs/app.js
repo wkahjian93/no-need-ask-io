@@ -441,12 +441,15 @@
         ${res.map((r, i) => clinicCard(r, i)).join('')}`
         : `<div class="notice">No clinic in the list offers that. Pick "Any check-up" and call the clinic to ask.</div>`;
     }
+    // clinics whose name matches what was typed (e.g. "O2 Klinik", "Pan-Medic")
+    const named = !near.busy && near.typed && (near.names || []).length ? (near.names || []) : [];
+    if (named.length) body += `<h2 class="sec">Clinics named "${esc(near.typed)}"</h2>${named.map((c, i) => clinicCard({c, km: near.at ? N.km(near.at, [c.lat, c.lng]) : null}, i)).join('')}`;
     return head + `<main class="wrap">
       <section class="card nearbox">
         <h2>Where is the customer?</h2>
         <button class="btn primary block" data-gps>${ICON.pin} Use my current location</button>
         <div class="or"><span>or type it</span></div>
-        <div class="row"><input id="where" type="text" inputmode="search" autocomplete="off" placeholder="Postcode or town, e.g. 11900 or Bayan Lepas" value="${esc(near.typed || '')}"><button class="btn" data-where>Find</button></div>
+        <div class="row"><input id="where" type="text" inputmode="search" autocomplete="off" placeholder="Postcode, town or clinic name, e.g. 11900, Farlim, O2 Klinik" value="${esc(near.typed || '')}"><button class="btn" data-where>Find</button></div>
         <label for="need" class="lbl">The check-up needs</label>
         <select id="need">${N.NEEDS.map(x => `<option value="${x.id}"${x.id === near.need ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}</select>
         <p class="anote">Worked out on this phone. The location is not saved or sent anywhere.</p>
@@ -457,10 +460,11 @@
     </main>`;
   }
   function clinicCard(r, i) {
-    const c = r.c, d = r.km < 1 ? Math.round(r.km * 1000 / 50) * 50 + ' m' : (r.km < 10 ? r.km.toFixed(1) : Math.round(r.km)) + ' km';
-    const exact = c.how === 'name' || c.how === 'street', tel = telOf(c);
+    const c = r.c, has = r.km != null, d = !has ? '' : r.km < 0.1 ? 'under 100 m' : r.km < 1 ? Math.round(r.km * 1000 / 50) * 50 + ' m' : (r.km < 10 ? r.km.toFixed(1) : Math.round(r.km)) + ' km';
+    const exact = c.how === 'name' || c.how === 'street', tel = telOf(c), where = [c.ar, c.st].filter((x, k, a) => x && a.indexOf(x) === k).join(', ');
+    const dist = !has ? esc(where) : (!exact && r.km < 0.5 ? 'in the same postcode area' : (r.km < 0.1 ? '' : 'about ') + d) + (exact ? '' : ' <i>(clinic placed by postcode, roughly)</i>');
     return `<article class="clinic"><div class="top"><span class="num">${i + 1}</span><div class="txt"><b>${esc(c.n)}</b>
-        <span class="km">${!exact && r.km < 0.5 ? 'in the same postcode area' : 'about ' + d}${exact ? '' : ' <i>(clinic placed by postcode, roughly)</i>'}</span></div></div>
+        <span class="km">${dist}</span>${has && where ? `<span class="meta" style="display:block">${esc(where)}</span>` : ''}</div></div>
       <p>${esc(c.a)}</p>
       <p class="meta">${c.h ? `Hours ${esc(c.h)}` : 'Hours not listed'} · Tel ${esc(c.t || '-')}</p>
       <p class="meta">${esc(facText(c))}</p>
@@ -477,8 +481,10 @@
     }, {enableHighAccuracy: true, timeout: 15000, maximumAge: 60000});
   }
   function findTyped(text) {
-    const p = N.place(text, PACK.geo, PACK.clinics);
-    near = Object.assign(near, p ? {at: p.at, label: p.label, rough: !!p.rough, err: null, typed: text} : {at: null, err: `Couldn't find "${text}". Try the 5-digit postcode instead.`, typed: text});
+    text = String(text || '').trim(); if (!text) { toast('Type a postcode, town or clinic name'); return; }
+    const p = N.place(text, PACK.geo, PACK.clinics), names = N.byName(text, PACK.clinics, 8);
+    near = Object.assign(near, {names, typed: text}, p ? {at: p.at, label: p.label, rough: !!p.rough, err: null}
+      : {at: null, err: names.length ? null : `Couldn't find "${text}". Try the 5-digit postcode, a town, or part of the clinic name.`});
     render();
   }
 
