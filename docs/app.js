@@ -12,6 +12,7 @@
     home: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>',
     more: '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
     chev: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>',
+    pin: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0114 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
     cam: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
     clip: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5l-8.2 8.2a5 5 0 01-7.1-7.1l8.5-8.5a3.3 3.3 0 014.7 4.7l-8.4 8.4a1.7 1.7 0 01-2.4-2.4l7.7-7.7"/></svg>',
     spark: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.2 6.3L20 10l-5.8 1.7L12 18l-2.2-6.3L4 10l5.8-1.7z"/></svg>'
@@ -101,6 +102,7 @@
     else if (h === '#/ask' && (current.turns || []).length) app.innerHTML = askView();
     else if (h === '#/ask') { history.replaceState(null, '', '#/'); app.innerHTML = homeView(); } // chat is gone after a refresh: start fresh
     else if (h === '#/all') app.innerHTML = allView();
+    else if (h === '#/clinics') app.innerHTML = clinicsView();
     else app.innerHTML = homeView();
     wireBar(app); wire(app);
     for (const k of ['q', 'fq']) { const el = $('#' + k); if (el && keep[k]) el.value = keep[k]; }
@@ -124,7 +126,7 @@
         <textarea id="q" placeholder="e.g. How to check my commission?  /  怎样下载电子保单？  /  Macam mana nak hantar ICM?" maxlength="500"></textarea>
         ${attachBar('home')}
         <div class="row"><button class="btn primary block" data-ask>${draft.length ? 'Ask AI about this' : 'Show me how'}</button></div>
-        <div class="chips">${pop.slice(0, 8).map(x => `<button class="chip" data-g="${x.id}">${esc(x.title.split(' (')[0].split(' / ')[0])}</button>`).join('')}</div>
+        <div class="chips"><button class="chip hot" data-clinics>${ICON.pin} Nearest panel clinic</button>${pop.slice(0, 8).map(x => `<button class="chip" data-g="${x.id}">${esc(x.title.split(' (')[0].split(' / ')[0])}</button>`).join('')}</div>
       </section>
       ${status}
       ${pop.length ? `<h2 class="sec">The 17 questions agents ask most</h2>${pop.map((x, i) => item(x, i + 1)).join('')}
@@ -157,6 +159,7 @@
     return (opts.inline ? '' : bar('No Need Ask IO', 'Step by step', true)) + `<main class="${opts.inline ? '' : 'wrap'}">
       ${asked ? `<div class="youasked">You asked: <b>${esc(asked)}</b></div>` : ''}
       <div class="head"><div class="kicker">${ICON.spark} ${opts.inline ? 'Screenshots for this' : 'How to do it yourself'}</div><h1>${esc(g.title)}</h1>${g.zh ? `<p class="sub">${esc(g.zh)} · ${esc(g.ms || '')}</p>` : ''}</div>
+      ${g.id === 'panel' && !opts.inline ? `<button class="btn primary block" data-clinics style="margin-bottom:12px">${ICON.pin} Find the 5 nearest to the customer</button>` : ''}
       ${g.steps.map((s, i) => `<article class="step"><div class="top"><span class="num">${i + 1}</span><div class="txt">${esc(s.t)}${pathHtml(s.path)}</div></div>
         ${s.shot && shotSrc(s.shot) ? `<button class="shot" data-shot="${s.shot}" data-cap="Step ${i + 1}" aria-label="Open screenshot for step ${i + 1}"><img loading="lazy" alt="ePartner screenshot for step ${i + 1}, red box shows where to tap" src="${shotSrc(s.shot)}"><span class="zoom">Tap to zoom</span></button>` : ''}</article>`).join('')}
       ${g.tips && g.tips.length ? `<div class="tips"><h3>Good to know</h3><ul>${g.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>` : ''}
@@ -187,6 +190,8 @@
     q = String(q || '').trim();
     if (q.length < 3 && draft.length) q = 'What does this show, and what should I do next?';
     if (q.length < 3) { toast('Type your question first'); return; }
+    // "nearest panel clinic" / "klinik panel terdekat" / "最近的panel诊所" -> the clinic finder
+    if (!draft.length && /(panel|klinik|clinic|诊所|医务所|medical check|check.?up|体检)/i.test(q) && /(near|nearest|dekat|terdekat|berhampiran|最近|附近|靠近|around)/i.test(q)) { go('#/clinics'); return; }
     cleanFirst(q, '#q', q => {
       current = {q, turns: [], att: draft}; draft = [];
       // with photos or a PDF the AI has to read them, so skip the instant guides
@@ -410,9 +415,85 @@
       <div class="row" style="margin-bottom:10px"><a class="btn dark" href="${CFG.epartner}" target="_blank" rel="noopener">Open ePartner</a><button class="btn" data-copyai="${i}">Copy answer</button></div>`;
   }
 
+  /* ---------- nearest panel clinics (worked out on this phone; the location is never saved or sent) ---------- */
+  const N = window.NNNear;
+  let near = {need: ''}; // {at, label, rough, gps, need, busy, err}
+  const FAC = {BC: 'Blood/urine', ECG3: 'ECG', CXR2: 'Chest X-ray', TMX2: 'Treadmill ECG', ULT2: 'Breast ultrasound', MM2: 'Mammogram', ECO2: 'Echo', LUF2: 'Lung function', KUB2: 'KUB X-ray', PAP2: 'Pap smear', LME: 'Long medical exam', MQ: 'Medical questionnaire', BPR2: '2 BP readings', ADS: "Doctor's statement", MAR2: 'Medical report', BQ: 'Breast questionnaire'};
+  const facText = c => { const known = c.fac.filter(f => FAC[f]).map(f => FAC[f]), lab = c.fac.some(f => /^GE\d+$/.test(f)); return (c.full ? 'Full facility · ' : '') + known.join(', ') + (lab ? ', GE blood profiles (lab)' : ''); };
+  const mapsDir = c => 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(c.n + ', ' + c.a);
+  const mapsFind = c => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(c.n + ', ' + c.a);
+  const telOf = c => (String(c.t).split(/[\/,&]| or /i)[0].match(/[\d+]/g) || []).join('');
+  function clinicsView() {
+    const list = PACK && PACK.clinics;
+    const head = bar('Nearest panel clinic', 'GE medical check-up', true);
+    if (!list) return head + `<main class="wrap"><div class="notice">${PACK ? 'The clinic list arrives with the next guide update. Ask Kah Jian to upload the new guides.' : 'Sign in first to download the guides and the clinic list.'}</div>${PACK ? '' : '<button class="btn primary block" data-signin>Sign in</button>'}<button class="btn block" data-g="panel" style="margin-top:10px">How to search the list in ePartner</button></main>`;
+    let body = '';
+    if (near.busy) body = `<div class="loading"><div class="spin"></div><b style="color:var(--text)">Finding your location…</b>Allow location if your phone asks.</div>`;
+    else if (near.err) body = `<div class="notice">${esc(near.err)}</div>`;
+    else if (near.at) {
+      let res = N.nearest(list, near.at, {need: near.need, n: 5});
+      const all = res.length, local = res.length && res[0].km < 100 ? res.filter(r => r.km < 100) : res; res = local;
+      const needLabel = (N.NEEDS.find(x => x.id === near.need) || {}).label;
+      body = res.length ? `<h2 class="sec">${res.length === 5 ? '5 nearest' : res.length === 1 ? 'Nearest' : res.length + ' nearest'} to ${esc(near.label)}${near.need ? ' · ' + esc(needLabel) : ''}</h2>
+        ${res.length < all ? `<p class="muted" style="margin:-4px 0 10px">Only ${res.length} clinic${res.length === 1 ? '' : 's'} within 100 km offer${res.length === 1 ? 's' : ''} this.</p>` : ''}
+        ${near.rough ? '<p class="muted" style="margin:-4px 0 10px">That place is approximate, so distances are rough.</p>' : ''}
+        ${res[0].km > 150 ? '<div class="notice">The nearest GE panel clinic is far from here. Check the location, or ask GE about reimbursement of medical fees.</div>' : ''}
+        ${res.map((r, i) => clinicCard(r, i)).join('')}`
+        : `<div class="notice">No clinic in the list offers that. Pick "Any check-up" and call the clinic to ask.</div>`;
+    }
+    return head + `<main class="wrap">
+      <section class="card nearbox">
+        <h2>Where is the customer?</h2>
+        <button class="btn primary block" data-gps>${ICON.pin} Use my current location</button>
+        <div class="or"><span>or type it</span></div>
+        <div class="row"><input id="where" type="text" inputmode="search" autocomplete="off" placeholder="Postcode or town, e.g. 11900 or Bayan Lepas" value="${esc(near.typed || '')}"><button class="btn" data-where>Find</button></div>
+        <label for="need" class="lbl">The check-up needs</label>
+        <select id="need">${N.NEEDS.map(x => `<option value="${x.id}"${x.id === near.need ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}</select>
+        <p class="anote">Worked out on this phone. The location is not saved or sent anywhere.</p>
+      </section>
+      ${body}
+      <p class="src">Straight-line distance${near.at ? ', so the drive may be longer' : ''}. Always call the clinic to confirm the doctor and the test are available before booking. List: ${esc(PACK.clinicsSource || 'GE New Business Panel Clinic Listing')}</p>
+      <button class="btn block" data-g="panel" style="margin-bottom:14px">How to check the full list in ePartner</button>
+    </main>`;
+  }
+  function clinicCard(r, i) {
+    const c = r.c, d = r.km < 1 ? Math.round(r.km * 1000 / 50) * 50 + ' m' : (r.km < 10 ? r.km.toFixed(1) : Math.round(r.km)) + ' km';
+    const exact = c.how === 'name' || c.how === 'street', tel = telOf(c);
+    return `<article class="clinic"><div class="top"><span class="num">${i + 1}</span><div class="txt"><b>${esc(c.n)}</b>
+        <span class="km">${!exact && r.km < 0.5 ? 'in the same postcode area' : 'about ' + d}${exact ? '' : ' <i>(clinic placed by postcode, roughly)</i>'}</span></div></div>
+      <p>${esc(c.a)}</p>
+      <p class="meta">${c.h ? `Hours ${esc(c.h)}` : 'Hours not listed'} · Tel ${esc(c.t || '-')}</p>
+      <p class="meta">${esc(facText(c))}</p>
+      <div class="row3"><a class="btn dark" href="${mapsDir(c)}" target="_blank" rel="noopener">Directions</a>${tel ? `<a class="btn" href="tel:${tel}">Call</a>` : ''}<button class="btn" data-copyc="${esc(c.id)}">Copy for client</button></div>
+    </article>`;
+  }
+  function locate() {
+    if (!navigator.geolocation) { near = Object.assign(near, {err: 'This phone can\'t share its location here. Type a postcode or town instead.', at: null}); render(); return; }
+    near = Object.assign(near, {busy: true, err: null}); render();
+    navigator.geolocation.getCurrentPosition(p => {
+      near = Object.assign(near, {busy: false, at: [p.coords.latitude, p.coords.longitude], label: 'your location', rough: p.coords.accuracy > 2000, typed: ''}); render();
+    }, e => {
+      near = Object.assign(near, {busy: false, at: null, err: e.code === 1 ? 'Location is switched off for this app. Type a postcode or town instead, or allow location in your phone settings.' : 'Couldn\'t get your location just now. Type a postcode or town instead.'}); render();
+    }, {enableHighAccuracy: true, timeout: 15000, maximumAge: 60000});
+  }
+  function findTyped(text) {
+    const p = N.place(text, PACK.geo, PACK.clinics);
+    near = Object.assign(near, p ? {at: p.at, label: p.label, rough: !!p.rough, err: null, typed: text} : {at: null, err: `Couldn't find "${text}". Try the 5-digit postcode instead.`, typed: text});
+    render();
+  }
+
   /* ---------- events ---------- */
   function wire(root) {
     $$('[data-g]', root).forEach(b => b.onclick = () => { current.matched = null; go('#/g/' + b.dataset.g); });
+    $$('[data-clinics]', root).forEach(b => b.onclick = () => go('#/clinics'));
+    const gps = $('[data-gps]', root); if (gps) gps.onclick = locate;
+    const where = $('#where', root), fw = $('[data-where]', root);
+    if (where && fw) { fw.onclick = () => findTyped(where.value); where.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); findTyped(where.value); } }; }
+    const need = $('#need', root); if (need) need.onchange = () => { near.need = need.value; render(); };
+    $$('[data-copyc]', root).forEach(b => b.onclick = () => {
+      const c = PACK.clinics.find(x => x.id === b.dataset.copyc); if (!c) return;
+      copy(`*Medical check-up clinic (Great Eastern panel)*\n${c.n}\n${c.a}\nTel: ${c.t || '-'}\nHours: ${c.h || 'please call to check'}\nMap: ${mapsFind(c)}\n\nPlease call the clinic before you go.`);
+    });
     $$('[data-cam]', root).forEach(b => b.onclick = () => pickFiles(b.dataset.cam, true));
     $$('[data-up]', root).forEach(b => b.onclick = () => pickFiles(b.dataset.up, false));
     $$('[data-rm]', root).forEach(b => b.onclick = () => {

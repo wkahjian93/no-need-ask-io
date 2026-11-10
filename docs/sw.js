@@ -1,7 +1,7 @@
 // Network first and always revalidated, so phones get updates as soon as they are online; falls back to the cache offline.
 // The guides themselves are kept in IndexedDB by app.js, not here.
-const CACHE = 'nnaio-v4';
-const FILES = ['./', 'index.html', 'style.css', 'config.js', 'match.js', 'app.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
+const CACHE = 'nnaio-v5';
+const FILES = ['./', 'index.html', 'style.css', 'config.js', 'match.js', 'near.js', 'app.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); });
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 self.addEventListener('fetch', e => {

@@ -14,8 +14,13 @@
    - Up to 8 photos or PDF pages per chat.
    - If a PDF has a password (like e-Policy PDFs), the app asks for it once. The password opens the file on the phone and is never saved or sent.
    - The AI reads them for this chat only. Nothing is saved. Cover the client's name and IC if you can.
-6. **Copy steps** puts the steps on your clipboard so you can paste them into WhatsApp.
-7. Still stuck? The app sends you to ICM or Agent Careline 03-4259 8111. Tell your IO what you already tried.
+6. **Nearest panel clinic for a medical check-up:** tap **Nearest panel clinic** on the home screen, or ask "nearest panel clinic".
+   - Tap **Use my current location** when you're with the customer, or type their postcode or town (e.g. 11900, Bayan Lepas).
+   - Pick what the check-up needs (ECG, X-ray, treadmill and so on) to see only clinics that offer it.
+   - You get the 5 nearest GE panel clinics, each with **Directions** (opens Google Maps), **Call**, and **Copy for client** (address, phone, hours and map link, ready for WhatsApp).
+   - Distances are straight-line. Always call the clinic before booking. The location is worked out on the phone and never saved or sent.
+7. **Copy steps** puts the steps on your clipboard so you can paste them into WhatsApp.
+8. Still stuck? The app sends you to ICM or Agent Careline 03-4259 8111. Tell your IO what you already tried.
 
 **Never type client details** (IC, phone, policy number). The app spots them in typed text and asks you to remove them before anything is sent. It can't check photos or PDFs, so cover or crop those details yourself where you can. The AI is told never to repeat them.
 

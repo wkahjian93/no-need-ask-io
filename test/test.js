@@ -120,6 +120,38 @@ t('the old photo reader (Form Filler / What-If) still sends at most 5 images', (
   assert.strictEqual(S.lastAI().images, 5);
 });
 t('locked sample PDF exists for the browser test', () => assert.ok(fs.readFileSync(path.join(__dirname, 'fixtures', 'locked-sample.pdf'), 'latin1').includes('/Encrypt')));
+console.log('\n9. Nearest panel clinics (worked out on the phone)');
+const NEAR = require('../docs/near.js'), CLN = require('../tools/clinics.js');
+const CP = CLN.forPack();
+t('all 538 clinics in GE\'s listing are parsed, each with a phone, address and postcode', () => {
+  const raw = CLN.parseClinics(); assert.strictEqual(raw.length, 538);
+  assert.ok(raw.every(c => c.address && /^\d{5}$/.test(c.pc)), 'clinic without postcode');
+  assert.ok(raw.filter(c => c.tel).length > 520, 'phones missing');
+});
+t('every clinic gets a map position inside Malaysia', () => {
+  assert.strictEqual(CP.unplaced.length, 0, CP.unplaced.join('; '));
+  assert.ok(CP.clinics.every(c => c.lat > 0.8 && c.lat < 7.5 && c.lng > 99.5 && c.lng < 119.5), 'position outside Malaysia');
+});
+t('distance check: KL to Penang is about 290 km in a straight line', () => { const d = NEAR.km([3.139, 101.687], [5.414, 100.329]); assert.ok(d > 280 && d < 300, d); });
+const PEN = NEAR.place('11900', CP.geo, CP.clinics);
+t('postcode 11900 is Bayan Lepas, Penang', () => assert.ok(PEN && PEN.at[0] > 5.2 && PEN.at[0] < 5.5 && PEN.at[1] > 100.1 && PEN.at[1] < 100.4, JSON.stringify(PEN)));
+t('5 nearest to 11900 are all Penang island clinics, nearest first', () => {
+  const r = NEAR.nearest(CP.clinics, PEN.at, {n: 5});
+  assert.strictEqual(r.length, 5);
+  assert.ok(r.every(x => /PENANG|PULAU PINANG|BAYAN|GELUGOR|JELUTONG|AIR ITAM|GEORGE ?TOWN|BALIK PULAU|\b11\d{3}\b/i.test(x.c.a)), r.map(x => x.c.a).join(' / '));
+  assert.ok(r.every((x, i) => !i || r[i - 1].km <= x.km));
+});
+t('typed towns work: "Bayan Lepas", "ipoh", "Taman Melawati"', () => {
+  for (const [q, lat] of [['Bayan Lepas', 5.3], ['ipoh', 4.6], ['Taman Melawati', 3.2]]) { const p = NEAR.place(q, CP.geo, CP.clinics); assert.ok(p && Math.abs(p.at[0] - lat) < 0.15, q + ' -> ' + JSON.stringify(p)); }
+});
+t('an unknown postcode falls back to its area, marked rough', () => { const p = NEAR.place('16479', CP.geo, CP.clinics); assert.ok(p && p.rough); });
+t('nonsense place gives no result', () => assert.strictEqual(NEAR.place('zzqxw', CP.geo, CP.clinics), null));
+t('"needs a treadmill ECG" only returns clinics that list TMX2', () => assert.ok(NEAR.nearest(CP.clinics, PEN.at, {need: 'TMX2'}).every(x => x.c.fac.includes('TMX2'))));
+t('the clinic list only reaches phones inside the team pack (not in the public app)', () => {
+  const pub = fs.readdirSync(path.join(__dirname, '..', 'docs')).map(f => f.endsWith('.js') ? fs.readFileSync(path.join(__dirname, '..', 'docs', f), 'utf8') : '').join('');
+  assert.ok(!/AGOOD CLINIC|MEGAN AVENUE/.test(pub));
+});
+t('asking "nearest panel clinic" opens the clinic finder', () => assert.ok(/nearest\|dekat\|terdekat/.test(fs.readFileSync(path.join(__dirname, '..', 'docs', 'app.js'), 'utf8'))));
 t('question too long is refused', () => assert.strictEqual(S.call({code: 'test-team-code', op: 'ioask', question: 'x'.repeat(700)}).error, 'invalid_request'));
 t('short plan code "sig" does not match "signature"', () => assert.ok(!M.terms('change of signature', SYN).includes('smartinvest')));
 

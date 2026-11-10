@@ -16,7 +16,11 @@ for (const g of guides) for (const s of g.steps) if (s.shot && !shots[s.shot]) {
   shots[s.shot] = fs.readFileSync(f).toString('base64');
 }
 if (missing.length) { console.error('Missing screenshots:', missing); process.exit(1); }
-const pack = {app: 'nnaio', ver, built: new Date().toISOString(), source: 'ePartner Study Pack + screenshots, 9 Nov 2026', guides, shots, syn: SYN};
+// panel clinics with map positions (for "nearest 5"); see tools/clinics.js and tools/geocode-clinics.js
+const CL = require('./clinics.js').forPack();
+console.log('panel clinics placed:', CL.clinics.length, JSON.stringify(CL.counts), CL.unplaced.length ? 'NOT placed: ' + CL.unplaced.join('; ') : '');
+const pack = {app: 'nnaio', ver, built: new Date().toISOString(), source: 'ePartner Study Pack + screenshots, 9 Nov 2026', guides, shots, syn: SYN,
+  clinics: CL.clinics, geo: CL.geo, clinicsSource: 'GE New Business Panel Clinic Listing (ePartner), extracted 9 Nov 2026. Map positions © OpenStreetMap contributors (ODbL) and GeoNames (CC BY 4.0).'};
 fs.writeFileSync(path.join(OUT, 'nnaio_pack.json'), JSON.stringify(pack));
 
 // ---------- 2. library chunks (server) ----------

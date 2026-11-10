@@ -102,7 +102,20 @@
   ok  no attachments: no attachment rule in the prompt
   ok  the old photo reader (Form Filler / What-If) still sends at most 5 images
   ok  locked sample PDF exists for the browser test
+
+9. Nearest panel clinics (worked out on the phone)
+  ok  all 538 clinics in GE's listing are parsed, each with a phone, address and postcode
+  ok  every clinic gets a map position inside Malaysia
+  ok  distance check: KL to Penang is about 290 km in a straight line
+  ok  postcode 11900 is Bayan Lepas, Penang
+  ok  5 nearest to 11900 are all Penang island clinics, nearest first
+  ok  typed towns work: "Bayan Lepas", "ipoh", "Taman Melawati"
+  ok  an unknown postcode falls back to its area, marked rough
+  ok  nonsense place gives no result
+  ok  "needs a treadmill ECG" only returns clinics that list TMX2
+  ok  the clinic list only reaches phones inside the team pack (not in the public app)
+  ok  asking "nearest panel clinic" opens the clinic finder
   ok  question too long is refused
   ok  short plan code "sig" does not match "signature"
 
-90 passed, 0 failed
+101 passed, 0 failed
