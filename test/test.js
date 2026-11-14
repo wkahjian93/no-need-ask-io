@@ -172,6 +172,13 @@ t('the clinic list only reaches phones inside the team pack (not in the public a
   assert.ok(!/AGOOD CLINIC|MEGAN AVENUE/.test(pub));
 });
 t('asking "nearest panel clinic" opens the clinic finder', () => assert.ok(/nearest\|dekat\|terdekat/.test(fs.readFileSync(path.join(__dirname, '..', 'docs', 'app.js'), 'utf8'))));
+console.log('\n10. Documents added 14 Nov 2026 are searchable');
+for (const [q, re] of [
+  ['how agent submit eclaim in GreatPlanner', /e-Claims Agent Guide_GreatPlanner/],
+  ['healthcare hotline guarantee letter 24 hours', /Healthcare Services Department \(HSD\) FAQ|Healthcare/],
+  ['client forgot e-Connect password how to reset', /FAQ e-Connect|e-Connect/],
+  ['GESICA facebook chatbot what can it do', /GESICA/]
+]) t(`"${q}" finds ${re}`, () => { const r = S.call({code: 'test-team-code', op: 'ioask', question: q}); assert.ok(r.sources.slice(0, 3).some(s => re.test(s.h)), r.sources.slice(0, 3).map(s => s.h).join(' / ')); });
 t('question too long is refused', () => assert.strictEqual(S.call({code: 'test-team-code', op: 'ioask', question: 'x'.repeat(700)}).error, 'invalid_request'));
 t('short plan code "sig" does not match "signature"', () => assert.ok(!M.terms('change of signature', SYN).includes('smartinvest')));
 

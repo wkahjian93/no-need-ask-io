@@ -61,6 +61,26 @@ for (const sec of splitBy(read('ePartner_full_crawl.md'), /^## PAGE /)) {
   const body = sec.body.replace(/^- \[([^\]]+)\]\([^)]*\)/gm, '- $1').replace(/\((?:DAM|\/content)[^)]*\)/g, '');
   push('ePartner page', sec.head, body);
 }
+// GE documents added later (private/source/docs-*/ *.txt, one file per PDF / deck / ePartner page, "--- page N ---" markers):
+// chunks of ~1,800 characters labelled with the document name and pages, so answers can cite them
+for (const dir of fs.readdirSync(path.join(P, 'source')).filter(d => /^docs-/.test(d)).sort()) {
+  const added = dir.replace(/^docs-/, ''), label = `GE document (added ${added})`;
+  for (const f of fs.readdirSync(path.join(P, 'source', dir)).filter(f => f.endsWith('.txt')).sort()) {
+    const name = f.replace(/\.txt$/, ''), text = fs.readFileSync(path.join(P, 'source', dir, f), 'utf8');
+    const pages = text.split(/\n--- (?:page|slide) (\d+) ---\n/);
+    let buf = '', from = null, to = null;
+    const flush = () => { if (clean(buf).length >= 40) chunks.push({s: label, h: `${name}${from ? ` (p${from}${to !== from ? '–' + to : ''})` : ''}`.slice(0, 200), x: clean(buf)}); buf = ''; from = to = null; };
+    if (pages.length < 3) { push(label, name, text); continue; }
+    for (let i = 1; i < pages.length; i += 2) {
+      const n = pages[i], body = clean(pages[i + 1] || '');
+      if (!body) continue;
+      if (buf && buf.length + body.length > 1800) flush();
+      if (body.length > 2200) { for (let k = 0; k < body.length; k += 1800) chunks.push({s: label, h: `${name} (p${n})`.slice(0, 200), x: body.slice(k, k + 1950)}); continue; }
+      buf += (buf ? '\n' : '') + body; from = from || n; to = n;
+    }
+    flush();
+  }
+}
 // NB panel clinics, one chunk group per area
 // (from GE_Panel_Clinics_Nov2026.csv: one line per clinic, tests spelled out, so "treadmill in Kulim" finds it)
 for (const sec of require('./clinics.js').libraryText()) push('NB Panel Clinic Listing (Nov 2026)', 'Panel clinics: ' + sec.head, sec.body, 2400);

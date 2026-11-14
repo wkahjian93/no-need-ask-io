@@ -86,7 +86,7 @@
 
   function bar(title, sub, back) {
     return `<header class="bar">${back ? `<button class="ib" data-back aria-label="Back">${ICON.back}</button>` : ''}
-      <div class="brand"><b>${esc(title)}</b><span>${esc(sub)}</span></div>
+      <img class="mark" src="img/mark-white.png" alt="REDEFINE" width="21" height="24"><div class="brand"><b>${esc(title)}</b><span>${esc(sub)}</span></div>
       ${back ? `<button class="ib" data-home aria-label="Home">${ICON.home}</button>` : `<button class="ib" data-menu aria-label="More">${ICON.more}</button>`}</header>`;
   }
   function wireBar(root) {
@@ -114,7 +114,7 @@
     const g = PACK ? PACK.guides : [];
     const pop = POPULAR.map(id => g.find(x => x.id === id)).filter(Boolean);
     let status = '';
-    if (!session()) status = `<div class="card"><h2>Get started</h2><p style="margin-bottom:12px">Sign in once with your name and the REDEFINE team code to download the ePartner guides. After that the guides work even without internet.</p><button class="btn primary block" data-signin>Sign in</button></div>`;
+    if (!session()) status = `<div class="card signin"><img class="logo" src="img/logo.png" alt="REDEFINE" width="110" height="64"><h2>Get started</h2><p style="margin-bottom:12px">Sign in once with your name and the REDEFINE team code to download the ePartner guides. After that the guides work even without internet.</p><button class="btn primary block" data-signin>Sign in</button></div>`;
     else if (!PACK) status = packState && packState !== 'ok'
       ? `<div class="notice">${esc(PACK_MSG[packState] || PACK_MSG.offline)}</div><button class="btn block" data-retry style="margin-bottom:12px">Try again</button>`
       : `<div class="loading"><div class="spin"></div>Downloading the ePartner guides (about 2 MB)…</div>`;
@@ -131,6 +131,7 @@
       ${status}
       ${pop.length ? `<h2 class="sec">The 17 questions agents ask most</h2>${pop.map((x, i) => item(x, i + 1)).join('')}
         <button class="btn block" data-all style="margin-top:4px">See all ${g.length} guides</button>` : ''}
+      <img class="footlogo" src="img/logo.png" alt="REDEFINE" width="96" height="56">
       <p class="foot">Guides from ePartner, checked ${PACK ? esc(fmtDate(PACK.built)) : '9 Nov 2026'}. ePartner changes, so if a screen looks different, tell Kah Jian.<br>
       ${session() ? `<button data-menu2>Settings</button>` : ''}</p>
     </main>`;

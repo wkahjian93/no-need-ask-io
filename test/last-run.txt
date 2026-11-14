@@ -120,7 +120,13 @@
   ok  "needs a treadmill ECG" only returns clinics that list TMX2
   ok  the clinic list only reaches phones inside the team pack (not in the public app)
   ok  asking "nearest panel clinic" opens the clinic finder
+
+10. Documents added 14 Nov 2026 are searchable
+  ok  "how agent submit eclaim in GreatPlanner" finds /e-Claims Agent Guide_GreatPlanner/
+  ok  "healthcare hotline guarantee letter 24 hours" finds /Healthcare Services Department \(HSD\) FAQ|Healthcare/
+  ok  "client forgot e-Connect password how to reset" finds /FAQ e-Connect|e-Connect/
+  ok  "GESICA facebook chatbot what can it do" finds /GESICA/
   ok  question too long is refused
   ok  short plan code "sig" does not match "signature"
 
-106 passed, 0 failed
+110 passed, 0 failed

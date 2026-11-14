@@ -164,3 +164,8 @@ details.sources li{font-size:13px;color:var(--muted);margin:5px 0}
 .row3{display:flex;gap:6px;margin:10px 0 0 38px;flex-wrap:wrap}
 .row3 .btn{flex:1 1 auto;min-height:42px;padding:0 10px;font-size:14px}
 .clinic .num{width:28px;height:28px;border-radius:50%;background:var(--ink);color:var(--gold);font-weight:700;display:grid;place-items:center;flex:none;font-size:13px}
+/* REDEFINE logo */
+.bar .mark{flex:none;width:21px;height:24px;margin-left:4px;opacity:.95}
+.signin{text-align:center}
+.signin .logo{display:block;margin:4px auto 10px;width:110px;height:auto}
+.footlogo{display:block;margin:18px auto 6px;width:96px;height:auto;opacity:.85}
