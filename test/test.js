@@ -67,7 +67,7 @@ for (const [q, re] of AI) t(`AI search for "${q}" finds ${re}`, () => {
   const r = S.call({code: 'test-team-code', op: 'ioask', question: q});
   assert.ok(!r.error, r.error); assert.ok(r.sources.slice(0, 3).some(s => re.test(s.h)), r.sources.slice(0, 3).map(s => s.h).join(' / '));
   const p = fs.readFileSync(path.join(__dirname, 'prompts', S.slug(q) + '.txt'), 'utf8');
-  assert.ok(/Use ONLY the SOURCES/.test(p) && p.length < 40000, 'prompt rules or size');
+  assert.ok(/Use ONLY the SOURCES/.test(p) && p.length < 70000, 'prompt rules or size');
 });
 console.log('\n7. Chat: follow-up questions remember the conversation (only for that request)');
 t('follow-up sends the earlier question to the AI and still finds the right documents', () => {
@@ -179,6 +179,25 @@ for (const [q, re] of [
   ['client forgot e-Connect password how to reset', /FAQ e-Connect|e-Connect/],
   ['GESICA facebook chatbot what can it do', /GESICA/]
 ]) t(`"${q}" finds ${re}`, () => { const r = S.call({code: 'test-team-code', op: 'ioask', question: q}); assert.ok(r.sources.slice(0, 3).some(s => re.test(s.h)), r.sources.slice(0, 3).map(s => s.h).join(' / ')); });
+console.log('\n11. Customer Service questions in agents\' own words (EN / 中文 / BM) find the right CS manual topic');
+{
+  const BENCH = require('./cs-bench.js'); let hit = 0; const miss = [];
+  for (const [q, re] of BENCH) { const r = S.call({code: 'test-team-code', op: 'ioask', question: q}); if (r.sources.slice(0, 3).some(x => re.test(x.h))) hit++; else miss.push(q); }
+  t(`${hit}/${BENCH.length} CS questions find the right topic in the top 3 (need 90%+)`, () => assert.ok(hit >= BENCH.length * 0.9, 'missed: ' + miss.join(' | ')));
+  t('every CS transaction index entry names its GE documents and dates', () => {
+    const T = require('../tools/cs-topics.js').topics();
+    assert.ok(T.topics.length >= 45 && T.unused.length === 0, T.topics.length + ' topics, unused ' + T.unused.join(', '));
+    assert.ok(T.topics.every(x => /GE documents: .+/.test(x.x) && /Agents also call it/.test(x.x)));
+  });
+}
+console.log('\n12. The AI reads more, from more documents');
+t('up to 20 sources, about 45,000 characters, at most 3 sections per document', () => {
+  const r = S.call({code: 'test-team-code', op: 'ioask', question: 'client want to surrender policy what documents and how long'});
+  const docs = {}; r.sources.forEach(x => { const k = x.s + '|' + x.h.replace(/\s*\(p[\d–-]+\)$/, ''); docs[k] = (docs[k] || 0) + 1; });
+  assert.ok(r.sources.length > 10 && r.sources.length <= 20, r.sources.length + ' sources');
+  assert.ok(Object.values(docs).every(n => n <= 3), JSON.stringify(docs));
+  const p = S.lastAI().prompt; assert.ok(p.length < 70000 && /10\. ACCURACY: read ALL the sources/.test(p) && /prefer the one with the newest date/.test(p));
+});
 t('question too long is refused', () => assert.strictEqual(S.call({code: 'test-team-code', op: 'ioask', question: 'x'.repeat(700)}).error, 'invalid_request'));
 t('short plan code "sig" does not match "signature"', () => assert.ok(!M.terms('change of signature', SYN).includes('smartinvest')));
 

@@ -63,7 +63,7 @@ for (const sec of splitBy(read('ePartner_full_crawl.md'), /^## PAGE /)) {
 }
 // GE documents added later (private/source/docs-*/ *.txt, one file per PDF / deck / ePartner page, "--- page N ---" markers):
 // chunks of ~1,800 characters labelled with the document name and pages, so answers can cite them
-for (const dir of fs.readdirSync(path.join(P, 'source')).filter(d => /^docs-/.test(d)).sort()) {
+for (const dir of fs.readdirSync(path.join(P, 'source')).filter(d => /^docs-/.test(d) && !/-csm$/.test(d)).sort()) { // *-csm = CS manual, used by the CS index below
   const added = dir.replace(/^docs-/, ''), label = `GE document (added ${added})`;
   for (const f of fs.readdirSync(path.join(P, 'source', dir)).filter(f => f.endsWith('.txt')).sort()) {
     const name = f.replace(/\.txt$/, ''), text = fs.readFileSync(path.join(P, 'source', dir, f), 'utf8');
@@ -81,6 +81,9 @@ for (const dir of fs.readdirSync(path.join(P, 'source')).filter(d => /^docs-/.te
     flush();
   }
 }
+// CS transaction index: one entry per Customer Service transaction (what agents call it in EN/中文/BM, which GE guide
+// + FAQ, key rules, FAQ questions). Curated like the Study Pack, so it is labelled as part of it (the server ranks those first).
+for (const t of require('./cs-topics.js').topics().topics) chunks.push({s: 'Study Pack: CS transaction index (from GE CS guides, Sep 2025 – Jan 2026)', h: t.h.slice(0, 200), x: t.x});
 // NB panel clinics, one chunk group per area
 // (from GE_Panel_Clinics_Nov2026.csv: one line per clinic, tests spelled out, so "treadmill in Kulim" finds it)
 for (const sec of require('./clinics.js').libraryText()) push('NB Panel Clinic Listing (Nov 2026)', 'Panel clinics: ' + sec.head, sec.body, 2400);

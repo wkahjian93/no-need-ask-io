@@ -32,3 +32,34 @@ Object.assign(module.exports, {
   'gccr': 'great critical care relief 0550', 'gmcc': 'great multi cancer care 0534', 'ggc': 'great generations care 0505', 'gvc2': 'great vantagecare 2 0460', 'gevc2': 'great early vantagecare 2 0461', 'gsc': 'great securecare 0402',
   'gmls': 'great medic lite secure', 'gms2': 'great medic shield 2', 'ltcr': 'long term care rider u944', 'free look': 'free-look free look cancellation', 'freelook': 'free-look free look cancellation'
 });
+
+// Customer Service transactions the way agents say them (added 15 Nov 2026 with the CS transaction index).
+Object.assign(module.exports, {
+  '不想再缴': 'paid-up extended term stop paying', '停缴': 'paid-up extended term stop paying', '不缴': 'paid-up extended term stop paying', '不能再付': 'paid-up extended term',
+  '换基金': 'switching of funds switch fund', '基金转换': 'switching of funds', '转换基金': 'switching of funds', '保费分配': 'premium apportionment', '基金分配': 'premium apportionment',
+  '减少保额': 'decrease in sum assured', '减保额': 'decrease in sum assured', '减保': 'decrease in sum assured', '增加保额': 'increase in sum assured', '加保额': 'increase in sum assured',
+  '不见': 'duplicate policy lost', '遗失': 'duplicate policy lost', '丢了': 'duplicate policy lost',
+  '贷款': 'policy loan', '借钱': 'policy loan borrow', '犹豫期': 'free-look freelook', '冷静期': 'free-look freelook',
+  '戒烟': 'smoker non-smoker', '吸烟': 'smoker', '抽烟': 'smoker', '职业': 'occupation class', '换工作': 'occupation class',
+  '签名': 'signature', '性别': 'gender correction', '出生日期': 'birth date correction', '车牌': 'car registration',
+  '升级': 'upgrade', '降级': 'downgrade', '取消附加': 'cancellation of rider', '持有人': 'ownership', '转名': 'transfer of ownership vesting',
+  '红利': 'bonus', '倒签': 'commencement date backdate', '生效日期': 'commencement date', '隐瞒': 'non-disclosure', '没申报': 'non-disclosure',
+  '分期': 'easipay instalment', '信用卡': 'credit card easipay', '营销': 'marketing consent pdpa', '推销': 'marketing consent pdpa',
+  '全部提款': 'full withdrawal', '加额外投资': 'single premium top-up', '一次性': 'single premium top-up lump sum',
+  '改年期': 'change of term', '换计划': 'change of plan', '转换计划': 'conversion privileges', '失效': 'lapse reinstatement',
+  'pinjaman': 'policy loan', 'tukar pemilik': 'transfer of ownership', 'pemilik': 'ownership', 'hidupkan': 'reinstatement revival',
+  'tandatangan': 'signature', 'jantina': 'gender correction', 'tarikh lahir': 'birth date correction', 'hilang': 'lost duplicate policy',
+  'tutup polisi': 'surrender', 'ambil duit': 'surrender withdrawal', 'merokok': 'smoker', 'pekerjaan': 'occupation class', 'tukar kerja': 'occupation class',
+  'berhenti bayar': 'paid-up extended term', 'tak mampu': 'paid-up extended term', 'tukar dana': 'switching of funds', 'dana': 'fund',
+  'kurangkan': 'decrease', 'tambah perlindungan': 'increase in sum assured', 'nombor kereta': 'car registration', 'kereta': 'car registration', 'bertenang': 'free-look',
+  'car number': 'car registration', 'car plate': 'car registration', 'cash out': 'surrender', 'borrow': 'policy loan',
+  'stop paying': 'paid-up extended term', 'cannot afford': 'paid-up extended term', 'quit smoking': 'smoker non-smoker',
+  'lost the policy': 'duplicate policy', 'lost policy': 'duplicate policy', 'backdate': 'commencement date', 'change owner': 'transfer of ownership',
+  'add rider': 'inclusion of benefits', 'remove rider': 'cancellation of rider', 'lump sum': 'single premium top-up'
+});
+Object.assign(module.exports, {
+  'beneficiary': 'nominee', 'beneficiaries': 'nominee', 'waris': 'nominee', 'typo': 'correction', 'salah': 'correction wrong',
+  'smoking': 'smoker', 'smoke': 'smoker', 'regret': 'free-look', 'full refund': 'free-look', 'cooling off': 'free-look',
+  '转给': 'transfer of ownership', '过户': 'transfer of ownership', '危疾': 'critical illness', '重大疾病': 'critical illness',
+  '加附加': 'inclusion of benefits rider', '附加保障': 'rider inclusion of benefits', '后悔': 'free-look', '退款': 'refund'
+});

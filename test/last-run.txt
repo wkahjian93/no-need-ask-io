@@ -126,7 +126,14 @@
   ok  "healthcare hotline guarantee letter 24 hours" finds /Healthcare Services Department \(HSD\) FAQ|Healthcare/
   ok  "client forgot e-Connect password how to reset" finds /FAQ e-Connect|e-Connect/
   ok  "GESICA facebook chatbot what can it do" finds /GESICA/
+
+11. Customer Service questions in agents' own words (EN / 中文 / BM) find the right CS manual topic
+  ok  55/55 CS questions find the right topic in the top 3 (need 90%+)
+  ok  every CS transaction index entry names its GE documents and dates
+
+12. The AI reads more, from more documents
+  ok  up to 20 sources, about 45,000 characters, at most 3 sections per document
   ok  question too long is refused
   ok  short plan code "sig" does not match "signature"
 
-110 passed, 0 failed
+113 passed, 0 failed
