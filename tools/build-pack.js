@@ -6,6 +6,13 @@ const fs = require('fs'), path = require('path');
 const ROOT = path.join(__dirname, '..'), P = path.join(ROOT, 'private'), OUT = path.join(P, 'build');
 const guides = require(path.join(P, 'guides.js'));
 const SYN = require('./synonyms.js');
+// underwriting index (Field Underwriting Guide): its Chinese condition names + everyday Malay/Chinese words become search words too
+const UW = require('./uw-topics.js').topics();
+for (const k in UW.syn) if (!(k in SYN)) SYN[k] = UW.syn[k];
+// product index (Agency Manuals + FAQs): Chinese plan names become search words
+const PROD = require('./product-topics.js').topics();
+for (const k in PROD.syn) if (!(k in SYN)) SYN[k] = PROD.syn[k];
+Object.assign(SYN, {gwe: 'great wealth enhancer 0549', sbs: 'smart baby shield plus', smcc: 'smart multi critical care', scr: 'smart critical relief', sepcc: 'smart early payout criticalcare'});
 const ver = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
 
 // ---------- 1. core pack (phones) ----------
@@ -81,6 +88,11 @@ for (const dir of fs.readdirSync(path.join(P, 'source')).filter(d => /^docs-/.te
     flush();
   }
 }
+// Underwriting index: one entry per medical condition in the Field Underwriting Guide (+ family history, BMI, occupation,
+// residency and other pages). "Can my client buy insurance with X?" is answered from these (the server reads them first).
+for (const t of UW.topics) chunks.push({s: 'Study Pack: Underwriting index (Field Underwriting Guide, Oct 2026)', h: t.h.slice(0, 200), x: t.x});
+// Product index: one entry per GE product / rider (Agency Manual + FAQ). A question naming a product reads its entry first.
+for (const t of PROD.topics) chunks.push({s: 'Study Pack: Product index (Agency Manuals & FAQs)', h: t.h.slice(0, 300), x: t.x});
 // CS transaction index: one entry per Customer Service transaction (what agents call it in EN/中文/BM, which GE guide
 // + FAQ, key rules, FAQ questions). Curated like the Study Pack, so it is labelled as part of it (the server ranks those first).
 for (const t of require('./cs-topics.js').topics().topics) chunks.push({s: 'Study Pack: CS transaction index (from GE CS guides, Sep 2025 – Jan 2026)', h: t.h.slice(0, 200), x: t.x});

@@ -128,12 +128,30 @@
   ok  "GESICA facebook chatbot what can it do" finds /GESICA/
 
 11. Customer Service questions in agents' own words (EN / 中文 / BM) find the right CS manual topic
-  ok  55/55 CS questions find the right topic in the top 3 (need 90%+)
+  ok  54/55 CS questions find the right topic in the top 3 (need 90%+)
   ok  every CS transaction index entry names its GE documents and dates
 
 12. The AI reads more, from more documents
   ok  up to 20 sources, about 45,000 characters, at most 3 sections per document
+
+13. "Can my client with X buy insurance?" is answered from the Field Underwriting Guide
+  ok  "client father died of heart attack at 50, can he buy?" -> /Family history of Heart disease/
+  ok  "my client had stroke last year, can still buy CI?" -> /^Underwriting: Stroke/
+  ok  "客户有糖尿病可以买保险吗" -> /^Underwriting: Diabetes mellitus/
+  ok  "boleh beli insurans kalau ada kencing manis" -> /^Underwriting: Diabetes mellitus/
+  ok  "client got high blood pressure can buy medical card?" -> /^Underwriting: Hypertension/
+  ok  "client has gout can buy medical card?" -> /^Underwriting: Gout/
+  ok  "客户有乙肝可以买吗" -> /^Underwriting: Hepatitis B/
+  ok  "client pregnant 5 months can buy medical card?" -> /^Underwriting: Pregnancy/
+  ok  "client BMI 35 overweight can apply?" -> /BMI/
+  ok  health questions go to the AI on the phone, not the "open the guide" screen
+  ok  a normal question does not get the health rule
+
+14. Product questions read that product's Agency Manual / FAQ entry first
+  ok  14/15 product questions lead with the right product entry (need 90%+)
+  ok  every product entry lists its GE documents, and "medical card" alone does not count as naming a product
+  ok  a question naming no product does not get the product rule
   ok  question too long is refused
   ok  short plan code "sig" does not match "signature"
 
-113 passed, 0 failed
+127 passed, 0 failed

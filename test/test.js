@@ -198,6 +198,39 @@ t('up to 20 sources, about 45,000 characters, at most 3 sections per document', 
   assert.ok(Object.values(docs).every(n => n <= 3), JSON.stringify(docs));
   const p = S.lastAI().prompt; assert.ok(p.length < 70000 && /10\. ACCURACY: read ALL the sources/.test(p) && /prefer the one with the newest date/.test(p));
 });
+console.log('\n13. "Can my client with X buy insurance?" is answered from the Field Underwriting Guide');
+for (const [q, re] of [
+  ['client father died of heart attack at 50, can he buy?', /Family history of Heart disease/],
+  ['my client had stroke last year, can still buy CI?', /^Underwriting: Stroke/],
+  ['客户有糖尿病可以买保险吗', /^Underwriting: Diabetes mellitus/],
+  ['boleh beli insurans kalau ada kencing manis', /^Underwriting: Diabetes mellitus/],
+  ['client got high blood pressure can buy medical card?', /^Underwriting: Hypertension/],
+  ['client has gout can buy medical card?', /^Underwriting: Gout/],
+  ['客户有乙肝可以买吗', /^Underwriting: Hepatitis B/],
+  ['client pregnant 5 months can buy medical card?', /^Underwriting: Pregnancy/],
+  ['client BMI 35 overweight can apply?', /BMI/]
+]) t(`"${q}" -> ${re}`, () => {
+  const r = S.call({code: 'test-team-code', op: 'ioask', question: q});
+  assert.ok(re.test(r.sources[0].h), r.sources.slice(0, 3).map(s => s.h).join(' / '));
+  assert.ok(/11\. HEALTH AND INSURABILITY/.test(S.lastAI().prompt) && /Never promise acceptance/.test(S.lastAI().prompt));
+});
+t('health questions go to the AI on the phone, not the "open the guide" screen', () => {
+  for (const q of ['客户有糖尿病可以买保险吗', 'boleh beli insurans kalau ada kencing manis', 'client got high blood pressure can buy medical card?']) assert.ok(!M.best(q, G, SYN).confident || M.isFactual(q), q);
+  assert.ok(M.best('how to check underwriting guide', G, SYN).confident);
+});
+t('a normal question does not get the health rule', () => { S.call({code: 'test-team-code', op: 'ioask', question: 'how to check commission'}); assert.ok(!/11\. HEALTH AND INSURABILITY/.test(S.lastAI().prompt)); });
+console.log('\n14. Product questions read that product\'s Agency Manual / FAQ entry first');
+{
+  const PB = require('./product-bench.js'); let hit = 0; const miss = [];
+  for (const [q, re] of PB) { const r = S.call({code: 'test-team-code', op: 'ioask', question: q}); if (r.sources.slice(0, 3).some(x => re.test(x.h)) && /12\. PRODUCT KNOWLEDGE/.test(S.lastAI().prompt)) hit++; else miss.push(q); }
+  t(`${hit}/${PB.length} product questions lead with the right product entry (need 90%+)`, () => assert.ok(hit >= PB.length * 0.9, 'missed: ' + miss.join(' | ')));
+  t('every product entry lists its GE documents, and "medical card" alone does not count as naming a product', () => {
+    const P = require('../tools/product-topics.js').topics();
+    assert.ok(P.topics.length >= 25 && P.unused.length === 0 && P.topics.every(x => /GE documents: .+/.test(x.x)));
+    assert.ok(P.topics.every(x => !/\[[^\]]*\bmedical card\b/.test(x.h)));
+  });
+  t('a question naming no product does not get the product rule', () => { S.call({code: 'test-team-code', op: 'ioask', question: 'how to change address'}); assert.ok(!/12\. PRODUCT KNOWLEDGE/.test(S.lastAI().prompt)); });
+}
 t('question too long is refused', () => assert.strictEqual(S.call({code: 'test-team-code', op: 'ioask', question: 'x'.repeat(700)}).error, 'invalid_request'));
 t('short plan code "sig" does not match "signature"', () => assert.ok(!M.terms('change of signature', SYN).includes('smartinvest')));
 

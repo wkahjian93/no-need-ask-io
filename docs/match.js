@@ -39,7 +39,9 @@
   /* a question about a fact or rule ("how many days", "what is the entry age") needs the AI, not a where-to-click guide */
   const FACT = /(^|\b)(how many|how much|how long|what is|what's|what are|which|why|can (i|we|my|the|a|client)|is it|are there|berapa|boleh ke|kenapa|apa itu|entry age|minimum|maximum|max |min |limit|difference|compare|eligible|covered|cover\b|what (document|doc|docs|do i need|does .* need|need)|requirement|apa dokumen|dokumen apa|perlu apa)|多少|几天|几岁|可以吗|是不是|为什么|有没有|区别|什么文件|哪些文件|要准备|需要什么|什么资料/;
   const HOWTO = /(^|\b)(how to|how do i|how can i|where|which menu|steps|cara|macam mana|mcm mana|kat mana|di mana)|怎样|怎么|哪里|在哪/;
-  const isFactual = q => FACT.test(norm(q)) && !HOWTO.test(norm(q));
+  /* "can my client (with diabetes) buy insurance?" is an underwriting question for the AI, not "how to open the guide" */
+  const INSURABLE = /\b(can|could|boleh|layak)\b.{0,40}\b(buy|beli|ambil|apply|insur\w*|cover\w*|accept\w*|sign up)\b|\binsurable\b|\bloading\b|\bexclusion\b|(可以|能|能不能|可不可以|会不会|能否).{0,15}(买|投保|受保|保|接受|批)|能买|可以买|买得到|保得到|会被拒|拒保|加费|除外/;
+  const isFactual = q => (FACT.test(norm(q)) || INSURABLE.test(norm(q))) && !HOWTO.test(norm(q)) || INSURABLE.test(norm(q)) && /(有|got|has|have|ada|dengan|with|患)/.test(norm(q));
 
   /* confident = show this guide straight away */
   function best(question, guides, syn) {
