@@ -222,6 +222,7 @@
   function turnSummary(t) {
     if (t.guide) { const g = PACK && PACK.guides.find(x => x.id === t.guide); return g ? `Showed the step-by-step guide "${g.title}": ` + g.steps.map((s, i) => `${i + 1}. ${s.t}`).join(' ') : ''; }
     const a = t.ai; if (!a) return '';
+    if (a.kind === 'clarify') return 'Asked the agent first: ' + (a.question || '') + (a.options && a.options.length ? ' (options: ' + a.options.map(o => o.label || o).join(' / ') + ')' : '');
     return [a.title, a.answer].concat((a.steps || []).map((s, i) => `${i + 1}. ${s.t || s.text || ''}`)).filter(Boolean).join(' ');
   }
   async function askAI(i) {
@@ -232,14 +233,20 @@
     if (location.hash !== '#/ask') go('#/ask'); else render();
     // earlier questions that failed still count as context ("how about SRM?" needs the question before it)
     const history = cur.turns.slice(0, i).slice(-4).map(x => ({q: x.q, a: (turnSummary(x) || '(no answer was shown)').slice(0, 1500)}));
-    const body = Object.assign({op: 'ioask', question: t.q}, history.length ? {history} : {}, attPayload(cur.att || []));
+    const body = Object.assign({op: 'ioask', question: t.q}, history.length ? {history} : {}, attPayload(cur.att || []), t.stage ? {stage: t.stage} : {});
     t.att = (cur.att || []).length;
     try {
       let r;
       try { r = await post(body); }
       catch (e) { if (e.code !== 'upstream_error') throw e; r = await post(body); } // one quiet retry for a server hiccup
+      if (r.clarify) { // the server asks first (e.g. in force or not) - no AI answer yet
+        t.ai = {kind: 'clarify', server: true, question: r.clarify.question, why: r.clarify.why, options: r.clarify.options || [], srcList: []};
+        return;
+      }
       let a; try { a = parseJSON(r.text); } catch (e) { throw {code: 'invalid_json'}; }
       a.srcList = r.sources || [];
+      if (a.kind === 'clarify') a.options = (Array.isArray(a.options) ? a.options : []).filter(o => typeof o === 'string' && o.trim()).slice(0, 4);
+      a.stageUsed = r.stage || (a.stage === 'unclear' ? 'unclear' : ''); // in force (CS Manual) or before in force (Field Underwriting Guide)
       t.ai = a;
     } catch (e) { t.err = e.code || 'upstream_error'; }
     finally { t.busy = false; if (current === cur && location.hash === '#/ask') { cur.scrollTo = i; render(); } }
@@ -400,13 +407,31 @@
     if (skipped.length) sheet(`<h3>Some files were not added</h3><p>${skipped.map(esc).join('<br>')}</p><p class="muted" style="margin:8px 0 12px">Up to ${MAX_IMAGES} photos or PDF pages per chat.</p><button class="btn block" data-x>OK</button>`, s => { $('[data-x]', s).onclick = closeSheet; });
   }
   ['#fCam', '#fUp'].forEach(id => { const el = $(id); if (el) el.addEventListener('change', e => { const f = [...(e.target.files || [])]; e.target.value = ''; if (f.length) intake(f); }); });
+  /* "before I answer..." - one question for the agent with tap-able replies (or they type more in the follow-up box) */
+  function clarifyHtml(a, i) {
+    const zh = /[㐀-鿿]/.test((current.turns[i] || {}).q || '');
+    const SERVER_ZH = {'Is this policy already in force?': '这张保单已经生效了吗？', 'Already in force': '已经生效', 'Not in force yet / client still buying': '还没生效 / 客户还在考虑买'};
+    const tr = s => zh && SERVER_ZH[s] ? SERVER_ZH[s] : s;
+    const opts = (a.options || []).map((o, k) => `<button class="btn" data-clarify="${i}:${k}">${esc(tr(o.label || o))}</button>`).join('');
+    return `<div class="head"><div class="kicker">${ICON.spark} ${zh ? '回答之前想先确认' : 'Before I answer'}</div><h1>${esc(a.server ? tr(a.question) : a.question || '')}</h1></div>
+      ${a.why ? `<p class="muted" style="margin:-4px 0 10px">${zh ? '不同情况规则不一样：已生效看 Customer Service Manual，未生效看 Field Underwriting Guide。' : esc(a.why)}</p>` : ''}
+      <div class="clarify">${opts}</div>
+      <p class="muted" style="margin:8px 0 12px">${zh ? '或者在下面的追问框打更多细节。' : 'Or type more details in the follow-up box below.'}</p>`;
+  }
   function answerHtml(a, i) {
+    if (a.kind === 'clarify') return clarifyHtml(a, i);
     const nc = a.kind === 'not_covered';
     const conf = a.confidence === 'high' ? '<span class="pill ok">Found in ePartner documents</span>' : a.confidence === 'low' || nc ? '<span class="pill err">Not sure, please double-check</span>' : '<span class="pill warn">Check the source to be safe</span>';
     const g = a.guide && PACK && PACK.guides.find(x => x.id === a.guide);
     const steps = Array.isArray(a.steps) ? a.steps.filter(s => s && (s.t || s.text)) : [];
     const used = (a.sources || []).map(n => a.srcList[n - 1]).filter(Boolean);
+    // which stage the answer assumed, with a one-tap switch (re-asks the same question for the other stage)
+    const st = a.stageUsed;
+    const stageBar = st === 'cs' ? `<div class="stage"><span>Answered for a policy <b>already in force</b> · Customer Service Manual</span><button class="btn sm" data-stage="${i}:nb">Not in force yet?</button></div>`
+      : st === 'nb' ? `<div class="stage"><span>Answered for <b>before in force</b> (buying / new business) · Field Underwriting Guide</span><button class="btn sm" data-stage="${i}:cs">Already in force?</button></div>`
+      : st === 'unclear' ? `<div class="stage"><span><b>Is this policy already in force?</b> The answer depends on it.</span><button class="btn sm" data-stage="${i}:cs">Yes, in force</button><button class="btn sm" data-stage="${i}:nb">No, before in force</button></div>` : '';
     return `<div class="head"><div class="kicker">${ICON.spark} AI answer from the ePartner library</div><h1>${esc(a.title || 'Answer')}</h1><p class="sub">${conf}</p></div>
+      ${stageBar}
       <div class="answer ${nc ? 'nc' : ''}">${esc(a.answer || '')}</div>
       ${steps.map((s, i) => `<article class="step"><div class="top"><span class="num">${i + 1}</span><div class="txt">${esc(s.t || s.text)}${pathHtml(s.path)}</div></div></article>`).join('')}
       ${a.notes && a.notes.length ? `<div class="tips"><h3>Good to know</h3><ul>${a.notes.map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>` : ''}
@@ -511,6 +536,13 @@
     if (askBtn) askBtn.onclick = () => ask(q.value);
     if (q) q.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(q.value); } };
     $$('[data-ai]', root).forEach(b => b.onclick = () => { if (b.dataset.ai === '') startAI(); else askAI(+b.dataset.ai); });
+    $$('[data-clarify]', root).forEach(b => b.onclick = () => {
+      const [i, k] = b.dataset.clarify.split(':').map(Number), t = current.turns[i], a = t && t.ai; if (!a || t.busy) return;
+      const o = a.options[k];
+      if (a.server && o && o.stage) { t.stage = o.stage; askAI(i); } // same question, now with the stage the agent chose
+      else if (o) followUp(String(o.label || o)); // the AI's question: the reply goes in as a follow-up, so it sees both
+    });
+    $$('[data-stage]', root).forEach(b => b.onclick = () => { const [i, s] = b.dataset.stage.split(':'); const t = current.turns[+i]; if (!t || t.busy) return; t.stage = s; askAI(+i); });
     $$('[data-followup]', root).forEach(b => b.onclick = () => go('#/'));
     $$('[data-new]', root).forEach(b => b.onclick = () => { current = {q: '', turns: []}; go('#/'); setTimeout(() => { const t = $('#q'); if (t) t.focus(); }, 50); });
     const fq = $('#fq', root), send = $('[data-send]', root);

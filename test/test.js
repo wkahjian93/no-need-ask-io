@@ -231,6 +231,45 @@ console.log('\n14. Product questions read that product\'s Agency Manual / FAQ en
   });
   t('a question naming no product does not get the product rule', () => { S.call({code: 'test-team-code', op: 'ioask', question: 'how to change address'}); assert.ok(!/12\. PRODUCT KNOWLEDGE/.test(S.lastAI().prompt)); });
 }
+console.log('\n15. In force -> Customer Service Manual; before in force -> Field Underwriting Guide');
+for (const [q, stage, re] of [
+  ['client want to surrender policy, how long to get money', 'cs', /CS transaction|customer-service-manual|Customer Service Manual/],
+  ['inforce policy want to add rider', 'cs', /CS transaction: Inclusion of Benefits/],
+  ['客户想退保', 'cs', /CS transaction|Customer Service Manual/],
+  ['polisi sedia ada nak tukar penama', 'cs', /CS transaction/],
+  ['client existing policy change payment frequency to yearly', 'cs', /customer-service|CS transaction/],
+  ['client wants to buy, has high blood pressure', 'nb', /^Underwriting: Hypertension/],
+  ['proposal pending, what medical requirement for sum assured 1 million', 'nb', /Medical & Financi|Underwriting essentials|limit/i],
+  ['客户想买保险，BMI 32 可以吗', 'nb', /BMI/],
+  ['nak beli insurans, umur 60, perlu medical check?', 'nb', /Underwriting essentials|Medical & Financi|limit/i],
+  ['non medical limit for age 40', 'nb', /Underwriting essentials|limit/i]
+]) t(`[${stage}] "${q}"`, () => {
+  const r = S.call({code: 'test-team-code', op: 'ioask', question: q}), p = S.lastAI().prompt;
+  assert.strictEqual(r.stage, stage);
+  assert.ok(re.test(r.sources[0].h), r.sources.slice(0, 3).map(s => s.h).join(' / '));
+  assert.ok(stage === 'cs' ? /13\. STAGE - POLICY ALREADY IN FORCE/.test(p) && !/^Study Pack: Underwriting index/.test(r.sources[0].s) : /13\. STAGE - BEFORE THE POLICY IS IN FORCE/.test(p));
+});
+t('the app\'s switch button can force the other stage', () => {
+  const r = S.call({code: 'test-team-code', op: 'ioask', question: 'client want to surrender policy, how long to get money', stage: 'nb'});
+  assert.strictEqual(r.stage, 'nb'); assert.ok(/13\. STAGE - BEFORE THE POLICY IS IN FORCE/.test(S.lastAI().prompt));
+});
+t('unsure if in force: the server asks the agent first, without calling the AI', () => {
+  const before = S.aiCalls(), r = S.call({code: 'test-team-code', op: 'ioask', question: 'client want to add rider, has diabetes, can buy?'});
+  assert.strictEqual(r.stage, 'unclear');
+  assert.ok(r.clarify && /already in force/.test(r.clarify.question) && r.clarify.options.map(o => o.stage).join() === 'cs,nb');
+  assert.strictEqual(S.aiCalls(), before, 'AI was called');
+  const r2 = S.call({code: 'test-team-code', op: 'ioask', question: 'client want to add rider, has diabetes, can buy?', stage: 'cs'});
+  assert.ok(!r2.clarify && r2.stage === 'cs', 'the agent\'s choice is used');
+});
+t('every AI prompt says: ask one question first if the answer depends on a missing detail', () => {
+  S.call({code: 'test-team-code', op: 'ioask', question: 'how many days to submit?'});
+  assert.ok(/14\. ASK FIRST IF UNSURE/.test(S.lastAI().prompt) && /"kind":"steps"\|"info"\|"not_covered"\|"clarify"/.test(S.lastAI().prompt));
+});
+t('questions about neither (e.g. commission) get no stage rule', () => { const r = S.call({code: 'test-team-code', op: 'ioask', question: 'how to check commission'}); assert.strictEqual(r.stage, ''); assert.ok(!/13\. STAGE/.test(S.lastAI().prompt)); });
+t('a short follow-up keeps the stage of the question before it', () => {
+  const r = S.call({code: 'test-team-code', op: 'ioask', question: 'how many days?', history: [{q: 'client want to surrender policy', a: 'Policy surrender steps'}]});
+  assert.strictEqual(r.stage, 'cs');
+});
 t('question too long is refused', () => assert.strictEqual(S.call({code: 'test-team-code', op: 'ioask', question: 'x'.repeat(700)}).error, 'invalid_request'));
 t('short plan code "sig" does not match "signature"', () => assert.ok(!M.terms('change of signature', SYN).includes('smartinvest')));
 

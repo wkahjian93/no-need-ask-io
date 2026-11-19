@@ -151,7 +151,24 @@
   ok  14/15 product questions lead with the right product entry (need 90%+)
   ok  every product entry lists its GE documents, and "medical card" alone does not count as naming a product
   ok  a question naming no product does not get the product rule
+
+15. In force -> Customer Service Manual; before in force -> Field Underwriting Guide
+  ok  [cs] "client want to surrender policy, how long to get money"
+  ok  [cs] "inforce policy want to add rider"
+  ok  [cs] "客户想退保"
+  ok  [cs] "polisi sedia ada nak tukar penama"
+  ok  [cs] "client existing policy change payment frequency to yearly"
+  ok  [nb] "client wants to buy, has high blood pressure"
+  ok  [nb] "proposal pending, what medical requirement for sum assured 1 million"
+  ok  [nb] "客户想买保险，BMI 32 可以吗"
+  ok  [nb] "nak beli insurans, umur 60, perlu medical check?"
+  ok  [nb] "non medical limit for age 40"
+  ok  the app's switch button can force the other stage
+  ok  unsure if in force: the server asks the agent first, without calling the AI
+  ok  every AI prompt says: ask one question first if the answer depends on a missing detail
+  ok  questions about neither (e.g. commission) get no stage rule
+  ok  a short follow-up keeps the stage of the question before it
   ok  question too long is refused
   ok  short plan code "sig" does not match "signature"
 
-127 passed, 0 failed
+142 passed, 0 failed

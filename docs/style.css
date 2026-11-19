@@ -169,3 +169,11 @@ details.sources li{font-size:13px;color:var(--muted);margin:5px 0}
 .signin{text-align:center}
 .signin .logo{display:block;margin:4px auto 10px;width:110px;height:auto}
 .footlogo{display:block;margin:18px auto 6px;width:96px;height:auto;opacity:.85}
+/* which stage an answer assumed: in force (CS Manual) / before in force (Field Underwriting Guide) */
+.stage{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;background:#FBF8F2;border:1px dashed var(--line);border-radius:12px;padding:8px 10px;margin:-2px 0 10px;font-size:13px;color:var(--muted)}
+.stage span{flex:1 1 180px}
+.stage b{color:var(--ink)}
+.stage .btn.sm{min-height:34px;font-size:13px}
+/* "before I answer" question with tap-able replies */
+.clarify{display:flex;flex-direction:column;gap:8px}
+.clarify .btn{justify-content:flex-start;text-align:left;min-height:46px;border-color:var(--gold);background:#fff}
